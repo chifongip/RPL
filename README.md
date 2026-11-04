@@ -98,8 +98,10 @@ bash rpl_sim2sim/run_policy.sh
 
 1. Release the elastic band: press `9` in the MuJoCo window.
 2. Start the policy right away: `start` on the pad (`]` on the keyboard).
-3. Switch to walking: `R2` (`=`).
-4. Drive with the sticks (`w/s/a/d`, `q/e`).
+3. Drive with the sticks (`w/s/a/d`, `q/e`). Stand/walk mode switches automatically
+   from commanded velocity: walking when XY speed exceeds 0.1 m/s or absolute yaw
+   rate exceeds 0.1 rad/s, stance otherwise. The existing model observation layout
+   is preserved; no retraining is needed to use automatic switching.
 
 ### Controls
 
@@ -113,10 +115,9 @@ bash rpl_sim2sim/run_policy.sh
 | --- | --- |
 | `start` | Start the policy |
 | `A` + `X` | Init pose |
-| `R2` | Toggle stand / walk |
 | Left stick | Forward speed |
 | Right stick | Yaw |
-| `L2` | Zero velocity |
+| `L2` | Zero velocity, disable fixed speed, and enter stance |
 | `B` + `Y` | Stop |
 | `B` + d-pad up / down | Base height |
 | `Y` / `select` + d-pad | Waist |
@@ -138,9 +139,9 @@ Run `run_sim.sh --no-joystick` and
 | --- | --- |
 | `]` | Start the policy |
 | `i` | Init pose |
-| `=` | Toggle stand / walk |
 | `w` / `s` / `a` / `d` | Linear velocity |
 | `q` / `e` | Angular yaw velocity |
+| `z` | Zero velocity and enter stance |
 | `o` | Stop |
 
 </details>

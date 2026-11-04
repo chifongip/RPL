@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -10,8 +11,10 @@ import pytest
 pytest.importorskip("holosoma_inference")
 ort = pytest.importorskip("onnxruntime")
 
+from holosoma_inference.inputs.api.commands import StateCommand, VelCmd  # noqa: E402
+
 from rpl_sim2sim.inference_presets import MODELS_DIR, g1_29dof_rpl_depth, rpl_depth_observation  # noqa: E402
-from rpl_sim2sim.policy import RplDepthPolicy  # noqa: E402
+from rpl_sim2sim.policy import FALCON_JOYSTICK_COMMANDS, FalconCommand, RplDepthPolicy  # noqa: E402
 
 
 def _group_dim(group: str) -> int:
@@ -65,3 +68,100 @@ def test_interval_holds_frames_between_pushes() -> None:
     assert seen[0] == [0, 0] and seen[4] == [0, 0]
     assert seen[5] == [0, 5] and seen[9] == [0, 5]
     assert seen[10] == [5, 10]
+
+
+def _velocity_policy(joystick=False):
+    policy = object.__new__(RplDepthPolicy)
+    policy._falcon_joystick = joystick
+    policy.fixed_x_speed = 0.0
+    policy.fixed_x_speed_enabled = False
+    policy._last_velocity_cmd = VelCmd((0.0, 0.0), 0.0)
+    policy.stand_command = np.zeros((1, 1), dtype=int)
+    policy.lin_vel_command = np.zeros((1, 2))
+    policy.ang_vel_command = np.zeros((1, 1))
+    policy.base_height_command = np.array([[0.60]])
+    policy.waist_dofs_command = np.zeros((1, 3))
+    policy.desired_base_height = 0.75
+    policy._velocity_input = Mock()
+    policy.logger = Mock()
+    return policy
+
+
+@pytest.mark.parametrize("joystick", [False, True])
+@pytest.mark.parametrize(
+    "linear,yaw,moving",
+    [
+        ((0.0, 0.0), 0.0, False),
+        ((0.1, 0.0), 0.1, False),
+        ((0.11, 0.0), 0.0, True),
+        ((-0.11, 0.0), 0.0, True),
+        ((0.0, 0.0), 0.11, True),
+        ((0.0, 0.0), -0.11, True),
+    ],
+)
+def test_mode_follows_velocity_and_returns_to_stance(joystick, linear, yaw, moving):
+    policy = _velocity_policy(joystick)
+    policy._apply_velocity(VelCmd(linear, yaw))
+    assert bool(policy.stand_command[0, 0]) == moving
+    np.testing.assert_allclose(policy.lin_vel_command[0], linear)
+    assert policy.ang_vel_command[0, 0] == yaw
+    assert policy.base_height_command[0, 0] == (0.75 if moving else 0.60)
+    policy._apply_velocity(VelCmd((0.0, 0.0), 0.0))
+    assert policy.stand_command[0, 0] == 0
+
+
+def test_joystick_ignores_lateral_but_keyboard_uses_xy_norm():
+    for joystick in (False, True):
+        policy = _velocity_policy(joystick)
+        policy._apply_velocity(VelCmd((0.08, 0.08), 0.0))
+        assert bool(policy.stand_command[0, 0]) == (not joystick)
+        assert policy.lin_vel_command[0, 1] == (0.0 if joystick else 0.08)
+
+
+def test_fixed_speed_updates_mode_immediately_and_restores_stick_when_disabled():
+    policy = _velocity_policy(joystick=True)
+    policy._apply_velocity(VelCmd((0.0, 0.0), 0.0))
+    policy._dispatch_command(FalconCommand.FIXED_X_UP)
+    policy._dispatch_command(FalconCommand.FIXED_X_UP)
+    assert policy.stand_command[0, 0] == 0  # Override still disabled.
+    policy._dispatch_command(FalconCommand.FIXED_X_TOGGLE)
+    assert policy.stand_command[0, 0] == 1
+    assert policy.lin_vel_command[0, 0] == pytest.approx(0.2)
+    policy._dispatch_command(FalconCommand.FIXED_X_TOGGLE)
+    assert policy.stand_command[0, 0] == 0
+    assert policy.lin_vel_command[0, 0] == 0.0
+
+
+@pytest.mark.parametrize("cmd", [StateCommand.ZERO_VELOCITY, StateCommand.STAND])
+def test_explicit_zero_cancels_fixed_speed_and_enters_stance(cmd):
+    policy = _velocity_policy(joystick=True)
+    policy.fixed_x_speed = 0.5
+    policy.fixed_x_speed_enabled = True
+    policy._apply_velocity(VelCmd((0.2, 0.0), 0.3))
+    policy._dispatch_command(cmd)
+    policy._velocity_input.zero.assert_called_once()
+    assert not policy.fixed_x_speed_enabled
+    assert policy.stand_command[0, 0] == 0
+    np.testing.assert_array_equal(policy.lin_vel_command, 0.0)
+    np.testing.assert_array_equal(policy.ang_vel_command, 0.0)
+    policy._dispatch_command(FalconCommand.BASE_HEIGHT_DOWN)
+    assert policy.stand_command[0, 0] == 0
+
+
+def test_manual_mode_commands_do_not_override_automatic_mode():
+    policy = _velocity_policy()
+    assert StateCommand.STAND_TOGGLE not in FALCON_JOYSTICK_COMMANDS.values()
+    for velocity in (0.0, 0.5):
+        policy._apply_velocity(VelCmd((velocity, 0.0), 0.0))
+        for cmd in (StateCommand.STAND_TOGGLE, StateCommand.WALK):
+            policy._dispatch_command(cmd)
+            assert policy.stand_command[0, 0] == int(velocity > 0.1)
+
+
+def test_height_resets_only_when_entering_walk():
+    policy = _velocity_policy()
+    policy._apply_velocity(VelCmd((0.5, 0.0), 0.0))
+    assert policy.base_height_command[0, 0] == 0.75
+    policy.base_height_command[0, 0] = 0.70
+    policy._apply_velocity(VelCmd((0.6, 0.0), 0.0))
+    assert policy.base_height_command[0, 0] == 0.70

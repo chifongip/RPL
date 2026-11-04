@@ -8,10 +8,10 @@ Usage::
     python -m rpl_sim2sim.run_policy --no-arm-ik                        # Xbox pad, fixed arm reference
 
 Xbox pad (FALCON's mapping, read by the sim and relayed as the wireless controller): ``A+X`` init
-pose, ``start`` start, ``R2`` stand/walk, left stick vx, right stick yaw, ``L2`` zero velocity,
+pose, ``start`` start, automatic stand/walk, left stick vx, right stick yaw, ``L2`` zero velocity,
 ``B+Y`` stop, ``B+up/down`` base height, ``Y`` or ``select`` + d-pad waist pitch/yaw, ``R1`` / ``X`` +
 d-pad hand targets (arm IK).
-Keyboard (policy terminal): ``i`` init pose, ``]`` start, ``=`` stand/walk, ``w/s/a/d`` velocity,
+Keyboard (policy terminal): ``i`` init pose, ``]`` start, automatic stand/walk, ``w/s/a/d`` velocity,
 ``q/e`` yaw, ``z`` zero velocity, ``o`` stop. Any ``holosoma_inference`` argument can be added.
 """
 
@@ -26,8 +26,8 @@ FALCON Xbox controls (sim2sim: the pad is plugged into the run_sim host):
   A+X            - init pose (ramp to the stand pose)
   start          - start the policy
   B+Y            - stop the policy (hold current pose)
-  R2             - toggle stand / walk
-  L2             - zero velocity
+  stand / walk   - automatic: XY speed > 0.1 m/s or |yaw rate| > 0.1 rad/s walks
+  L2             - zero velocity, disable fixed speed, and enter stance
   left stick     - forward/backward velocity (lateral is ignored, as in FALCON)
   right stick    - yaw rate
   B+up / B+down  - base height +/- 0.1
@@ -55,8 +55,18 @@ def main() -> None:
     holosoma_guide = holosoma_run_policy._print_control_guide
 
     def _print_control_guide(policy_class, use_joystick: bool, dual_mode: bool = False):
-        if use_joystick and issubclass(policy_class, RplDepthPolicy):
-            for line in FALCON_JOYSTICK_GUIDE.splitlines():
+        if issubclass(policy_class, RplDepthPolicy):
+            guide = FALCON_JOYSTICK_GUIDE if use_joystick else """\
+RPL keyboard controls (policy terminal):
+  i              - init pose
+  ]              - start the policy
+  o              - stop the policy
+  w/s/a/d        - linear velocity
+  q/e            - yaw rate
+  z              - zero velocity and enter stance
+  stand / walk   - automatic: XY speed > 0.1 m/s or |yaw rate| > 0.1 rad/s walks
+MuJoCo window: 7/8 raise/lower the gantry, 9 releases it."""
+            for line in guide.splitlines():
                 if not policy_class.enable_arm_ik and "(arm IK)" in line:
                     continue
                 logger.info(line)

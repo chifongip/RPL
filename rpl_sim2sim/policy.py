@@ -27,6 +27,7 @@ import numpy as np
 from holosoma_inference.config.config_types.observation import ObservationConfig
 from holosoma_inference.inputs.api.commands import StateCommand, VelCmd
 from holosoma_inference.inputs.impl.interface import InterfaceInput
+from holosoma_inference.policies.base import BasePolicy
 from holosoma_inference.policies.locomotion import LocomotionPolicy
 from holosoma_inference.sensors.depth_heartbeat import STATE_FAILED
 from holosoma_inference.sensors.depth_shm import DepthShmSensor
@@ -68,7 +69,6 @@ FALCON_JOYSTICK_COMMANDS: dict[str, StateCommand | FalconCommand] = {
     "start": StateCommand.START,
     "B+Y": StateCommand.STOP,
     "A+X": StateCommand.INIT,
-    "R2": StateCommand.STAND_TOGGLE,
     "L2": StateCommand.ZERO_VELOCITY,
     "Y+left": StateCommand.KP_DOWN,
     "Y+right": StateCommand.KP_UP,
@@ -114,6 +114,8 @@ class RplDepthPolicy(LocomotionPolicy):
     """Decoupled loco-manipulation depth student (RPL / FALCON-Terrains)."""
 
     enable_arm_ik = True
+    # Match training's default stand_vel_threshold (m/s for XY, rad/s for yaw).
+    stand_vel_threshold = 0.1
 
     def __init__(self, config):
         super().__init__(config)
@@ -131,6 +133,7 @@ class RplDepthPolicy(LocomotionPolicy):
     def _create_input_providers(self):
         self.fixed_x_speed = 0.0
         self.fixed_x_speed_enabled = False
+        self._last_velocity_cmd = VelCmd((0.0, 0.0), 0.0)
         super()._create_input_providers()
         self._falcon_joystick = isinstance(self._velocity_input, InterfaceInput)
         for provider in {id(p): p for p in (self._velocity_input, self._command_provider)}.values():
@@ -138,15 +141,42 @@ class RplDepthPolicy(LocomotionPolicy):
                 provider._mapping = dict(FALCON_JOYSTICK_COMMANDS)
 
     def _apply_velocity(self, vc: VelCmd) -> None:
-        if not self._falcon_joystick:
-            super()._apply_velocity(vc)
-            return
-        # FALCON drops the stick's lateral axis, and its fixed-x override ignores the stand gate.
-        super()._apply_velocity(VelCmd((vc.lin_vel[0], 0.0), vc.ang_vel))
-        if self.fixed_x_speed_enabled:
-            self.lin_vel_command[0, 0] = self.fixed_x_speed
+        """Derive mode from the requested velocity, before any stance gating."""
+        self._last_velocity_cmd = vc
+        vx, vy = vc.lin_vel
+        if self._falcon_joystick:
+            vy = 0.0  # FALCON ignores the stick's lateral axis.
+            if self.fixed_x_speed_enabled:
+                vx = self.fixed_x_speed
+        moving = np.hypot(vx, vy) > self.stand_vel_threshold or abs(vc.ang_vel) > self.stand_vel_threshold
+        was_moving = bool(self.stand_command[0, 0])
+        self.stand_command[0, 0] = int(moving)
+        self.lin_vel_command[0] = (vx, vy)
+        self.ang_vel_command[0, 0] = vc.ang_vel
+        if moving and not was_moving:
+            self.base_height_command[0, 0] = self.desired_base_height
+
+    def _handle_zero_velocity(self):
+        # A latched fixed speed must not undo an explicit zero-velocity command.
+        self.fixed_x_speed_enabled = False
+        super()._handle_zero_velocity()
+        self._apply_velocity(VelCmd((0.0, 0.0), 0.0))
+
+    def _print_control_status(self):
+        BasePolicy._print_control_status(self)
+        mode = "Walking" if self.stand_command[0, 0] else "Standing"
+        vx, vy = self.lin_vel_command[0]
+        self.logger.info(
+            f"{mode} (automatic) | vx {vx:+.2f}, vy {vy:+.2f} m/s | yaw {self.ang_vel_command[0, 0]:+.2f} rad/s"
+        )
 
     def _dispatch_command(self, cmd):
+        if cmd in (StateCommand.STAND_TOGGLE, StateCommand.WALK):
+            self.logger.info("Stand/walk mode is automatic from commanded velocity.")
+            return
+        if cmd == StateCommand.STAND:
+            self._handle_zero_velocity()
+            return
         if not isinstance(cmd, FalconCommand):
             super()._dispatch_command(cmd)
             return
@@ -171,8 +201,7 @@ class RplDepthPolicy(LocomotionPolicy):
         elif cmd in EE_STEPS:
             self._step_ee_targets(*EE_STEPS[cmd])
             return
-        if self.fixed_x_speed_enabled:
-            self.lin_vel_command[0, 0] = self.fixed_x_speed
+        self._apply_velocity(self._last_velocity_cmd)
         self.logger.info(
             f"base height {self.base_height_command[0, 0]:.2f} | waist yaw/pitch {self.waist_dofs_command[0, 0]:+.2f}/"
             f"{self.waist_dofs_command[0, 2]:+.2f} | fixed x {self.fixed_x_speed:+.2f} "
