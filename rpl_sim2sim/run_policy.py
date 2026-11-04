@@ -5,6 +5,7 @@ Usage::
     python -m rpl_sim2sim.run_policy                                    # shipped student, Xbox pad
     python -m rpl_sim2sim.run_policy --task.model-path /path/model_XXXXX.onnx   # your export
     python -m rpl_sim2sim.run_policy --task.velocity-input keyboard --task.state-input keyboard
+    python -m rpl_sim2sim.run_policy --no-arm-ik                        # Xbox pad, fixed arm reference
 
 Xbox pad (FALCON's mapping, read by the sim and relayed as the wireless controller): ``A+X`` init
 pose, ``start`` start, ``R2`` stand/walk, left stick vx, right stick yaw, ``L2`` zero velocity,
@@ -46,11 +47,18 @@ def main() -> None:
 
     from rpl_sim2sim.policy import RplDepthPolicy
 
+    if "--no-arm-ik" in sys.argv:
+        sys.argv[:] = [arg for arg in sys.argv if arg != "--no-arm-ik"]
+        RplDepthPolicy.enable_arm_ik = False
+        logger.info("ArmIK disabled; joystick locomotion uses the default arm reference pose.")
+
     holosoma_guide = holosoma_run_policy._print_control_guide
 
     def _print_control_guide(policy_class, use_joystick: bool, dual_mode: bool = False):
         if use_joystick and issubclass(policy_class, RplDepthPolicy):
             for line in FALCON_JOYSTICK_GUIDE.splitlines():
+                if not policy_class.enable_arm_ik and "(arm IK)" in line:
+                    continue
                 logger.info(line)
         else:
             holosoma_guide(policy_class, use_joystick, dual_mode=dual_mode)

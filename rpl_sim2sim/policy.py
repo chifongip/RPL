@@ -113,6 +113,8 @@ UPPER_BODY_CONTROLLER_HZ = 30.0
 class RplDepthPolicy(LocomotionPolicy):
     """Decoupled loco-manipulation depth student (RPL / FALCON-Terrains)."""
 
+    enable_arm_ik = True
+
     def __init__(self, config):
         super().__init__(config)
         robot = self.config.robot
@@ -121,7 +123,7 @@ class RplDepthPolicy(LocomotionPolicy):
         self.ref_upper_dof_pos = np.asarray(robot.default_dof_angles, dtype=np.float32)[upper_indices].reshape(1, -1)
         self.upper_indices = np.asarray(upper_indices)
         self.arm_ik_thread = None
-        if self._falcon_joystick:
+        if self._falcon_joystick and self.enable_arm_ik:
             self._init_upper_body_controller()
         self._init_depth_sensor()
 
@@ -189,6 +191,9 @@ class RplDepthPolicy(LocomotionPolicy):
         self.arm_ik_thread.start()
 
     def _step_ee_targets(self, dx: float, dy: float, dz: float) -> None:
+        if self.arm_ik_thread is None:
+            self.logger.info("Hand target command ignored: ArmIK is disabled.")
+            return
         self.ee_left += (dx, dy, dz)
         self.ee_right += (dx, -dy, dz)
         self.logger.info(f"EE target left {np.round(self.ee_left, 2)} | right {np.round(self.ee_right, 2)}")
