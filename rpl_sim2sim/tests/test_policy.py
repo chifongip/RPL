@@ -42,6 +42,19 @@ def test_depth_shape_matches_the_sim_block() -> None:
     assert rpl_depth_observation.obs_dims["cam_depth"] == 2 * 27 * 48
 
 
+def test_front_depth_shape_matches_the_sim_block() -> None:
+    from rpl_sim2sim.inference_presets import g1_29dof_rpl_depth_front
+    from rpl_sim2sim.run_sim import PACKAGE_DIR, load_config
+
+    cfg = g1_29dof_rpl_depth_front
+    sim = load_config(PACKAGE_DIR / "config/loco_manip_cam_front.yaml")
+    assert list(cfg.camera.poses) == list(sim["ROBOT_CFG"]["cameras"]["poses"]) == ["cam_front_depth"]
+    assert cfg.camera.num_cameras == 1
+    assert cfg.observation.obs_dims["cam_depth"] == 27 * 48
+    assert cfg.observation.history_length_dict["perception_obs"] == 2
+    assert cfg.task.model_path == ""
+
+
 def _bare_policy(history: dict[str, int], intervals: dict[str, int]) -> RplDepthPolicy:
     policy = object.__new__(RplDepthPolicy)
     policy.obs_terms_sorted = {group: ["b", "a"] if group == "g" else ["x"] for group in history}

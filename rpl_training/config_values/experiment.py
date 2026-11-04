@@ -13,7 +13,7 @@ from holosoma.config_values import action
 from holosoma.config_values.terrain import terrain_locomotion_plane
 
 from rpl_training.config_values import algo, robot, simulator, terrain
-from rpl_training.config_values.camera import warp_dual_depth_cameras_falcon
+from rpl_training.config_values.camera import warp_dual_depth_cameras_falcon, warp_front_depth_camera_falcon
 from rpl_training.config_values.command import (
     g1_29dof_falcon_hm_command,
     g1_29dof_rpl_command_distill,
@@ -161,6 +161,34 @@ g1_29dof_rpl_distill = replace(
     randomization=g1_29dof_rpl_randomization_distill,
     command=g1_29dof_rpl_command_distill,
     curriculum=g1_29dof_rpl_curriculum_distill,
+)
+
+
+# Front-only student, sized for four GPUs with 1024 environments per GPU.
+# Teachers still consume height maps; only the student's visual input changes.
+_distill_modules = g1_29dof_rpl_distill.algo.config.module_dict
+g1_29dof_rpl_distill_front = replace(
+    g1_29dof_rpl_distill,
+    training=replace(g1_29dof_rpl_distill.training, name="g1_29dof_rpl_distill_front", num_envs=4096),
+    camera=warp_front_depth_camera_falcon,
+    algo=replace(
+        g1_29dof_rpl_distill.algo,
+        config=replace(
+            g1_29dof_rpl_distill.algo.config,
+            module_dict=replace(
+                _distill_modules,
+                actor_lower_body=replace(
+                    _distill_modules.actor_lower_body,
+                    layer_config=replace(
+                        _distill_modules.actor_lower_body.layer_config,
+                        num_cameras=1,
+                        # Direction-based front/back selection is unnecessary with one camera.
+                        use_vision_mask=False,
+                    ),
+                ),
+            ),
+        ),
+    ),
 )
 
 

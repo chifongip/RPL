@@ -1,0 +1,31 @@
+# Front-only variant for the single-camera student.
+# FAR-FALCON-Terrains sim2sim config, resolved from its hydra config
+#   task=loco_manip/loco_manip_cam robot=g1/g1_29dof +obs=loco_manip/g1_29dof_depth task.USE_JOYSTICK=true
+#   task.sim_env.config.ROBOT_SCENE=.../scene_g1_29dof_terrains_freebase_real.xml
+# and trimmed to the keys rpl_sim2sim.falcon_sim reads. ROBOT_SCENE is relative to this package.
+# Camera poses come from the MJCF (cam_front_depth / cam_back_depth); only their names are used here.
+ROBOT_SCENE: assets/scene_g1_29dof_terrains_freebase_real.xml
+DOMAIN_ID: 0
+INTERFACE: lo
+USE_JOYSTICK: true
+JOYSTICK_TYPE: xbox
+JOYSTICK_DEVICE: 0
+SIMULATE_DT: 0.005
+VIEWER_DT: 0.02
+ENABLE_ELASTIC_BAND: true
+BAND_ATTACHED_LINK: torso_link
+USE_RENDERER: true
+ROBOT_CFG:
+  ROBOT_TYPE: g1_29dof
+  FREE_BASE: true
+  USE_SENSOR: false
+  NUM_MOTORS: 29
+  NUM_JOINTS: 29
+  motor_effort_limit_list: [88.0, 88.0, 88.0, 139.0, 50.0, 50.0, 88.0, 88.0, 88.0, 139.0, 50.0, 50.0, 88.0, 50.0,
+    50.0, 25.0, 25.0, 25.0, 25.0, 25.0, 5.0, 5.0, 25.0, 25.0, 25.0, 25.0, 25.0, 5.0, 5.0]
+  cameras:
+    poses:
+      cam_front_depth: {}
+    props: {image_type: depth, width: 240, height: 135, if_resize: true, resized_width: 48, resized_height: 27,
+      horizontal_fov: 101.41, vertical_fov: 69.0, near_clip: 0.1, far_clip: 2.0, frame_rate: 10, image_show: false,
+      depth_delay: 1}

@@ -174,6 +174,13 @@ The launchers log to W&B by default. Set `LOGGER=disabled` to keep logs local un
 `WANDB_PROJECT` / `WANDB_ENTITY` / `RUN_NAME` to pick the W&B destination. `NGPUS` sets the number of GPUs,
 and extra arguments pass through to `rpl_training.train_agent`.
 
+For multi-GPU IsaacGym runs, the launchers build/load `gymtorch` once before
+starting the workers. The first launch may pause while compiling; later launches
+reuse the cached extension. IsaacGym launchers default to
+`TORCH_EXTENSIONS_DIR="$HOME/.cache/torch_extensions/rpl_hsgym_front"` and
+`MAX_JOBS=2`. Both the preparation step and workers inherit these settings;
+explicit environment values override the defaults.
+
 ### 1. Train the RL experts
 We recommend training the experts on 4 GPUs.
 ```bash
@@ -201,6 +208,39 @@ own experts, pass either:
 ```
 
 Distillation runs export `model_XXXXX.onnx` next to each checkpoint for [sim2sim](#sim2sim-mujoco).
+
+### Front-camera-only distillation on four GPUs
+
+The front-only preset uses the shipped terrain teachers and starts a new student with
+one torso-mounted front depth camera. It retains the 48×27 depth images, two-frame
+history, 10 Hz camera updates, noise and pose randomization. The existing dual-camera
+presets remain available.
+
+On the four-GPU Ada machine, after the training environment setup above:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 NGPUS=4 \
+  bash rpl_training/training_runs/run_distill_front.sh \
+  --training.name rpl-front-4gpu
+```
+
+The launcher defaults to four GPUs and the `g1-29dof-rpl-distill-front` experiment:
+4,096 environments total (1,024 per GPU), four minibatches, and 20,000 learning
+iterations. This keeps the dual-camera preset's per-GPU environment count; the total
+batch is half its eight-GPU run. GPU memory use and throughput still need measuring
+on your machine. To start with fewer environments, append `--training.num-envs 2048`
+(512 per GPU). Set `LOGGER=disabled` for local logging. Do not pass a dual-camera
+student checkpoint to resume this run; the teacher checkpoints are reused automatically.
+
+To evaluate the resulting single-camera ONNX export, run these in separate terminals:
+
+```bash
+bash rpl_sim2sim/run_sim.sh --config rpl_sim2sim/config/loco_manip_cam_front.yaml
+bash rpl_sim2sim/run_policy.sh inference:g1-29dof-rpl-depth-front \
+  --task.model-path /absolute/path/to/model_XXXXX.onnx
+```
+
+Supply your front-only export explicitly; the shipped ONNX models use two cameras.
 
 
 

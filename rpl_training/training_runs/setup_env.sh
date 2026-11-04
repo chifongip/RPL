@@ -42,8 +42,18 @@ rpl_activate_sim() {
 }
 
 rpl_training_command() {
+    if [[ "$SIM" == isaacgym ]]; then
+        # Use the cache and compiler concurrency verified on the training server.
+        export TORCH_EXTENSIONS_DIR="${TORCH_EXTENSIONS_DIR:-$HOME/.cache/torch_extensions/rpl_hsgym_front}"
+        export MAX_JOBS="${MAX_JOBS:-2}"
+    fi
     # --training.num-envs is the TOTAL across GPUs; holosoma splits it per rank.
     if [[ "$NGPUS" -gt 1 ]]; then
+        if [[ "$SIM" == isaacgym ]]; then
+            # Build/load the shared extension before torchrun workers contend for its lock.
+            echo "[rpl] Preparing gymtorch before starting $NGPUS GPU workers..."
+            python -c 'from isaacgym import gymapi, gymtorch; print("[rpl] gymtorch ready", flush=True)' || return 1
+        fi
         TRAIN_COMMAND=(torchrun --standalone --nnodes=1 "--nproc_per_node=$NGPUS")
     else
         TRAIN_COMMAND=(python)

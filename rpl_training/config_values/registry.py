@@ -25,6 +25,7 @@ EXPERIMENTS = {
     "g1_29dof_rpl_expert_slopes": experiment.g1_29dof_rpl_expert_slopes,
     # Multi-depth DAgger student (FALCON ``+exp=falcon_hm_dagger_moe algo=dagger_ma_moe_hm_cnn_depth_vtr``).
     "g1_29dof_rpl_distill": experiment.g1_29dof_rpl_distill,
+    "g1_29dof_rpl_distill_front": experiment.g1_29dof_rpl_distill_front,
 }
 
 
@@ -33,6 +34,7 @@ def register() -> None:
     for name, cfg in EXPERIMENTS.items():
         EXPERIMENT_REGISTRY.add(name, cfg)
     CAMERA_MANAGER_REGISTRY.add("warp_dual_depth_cameras_falcon", camera.warp_dual_depth_cameras_falcon)
+    CAMERA_MANAGER_REGISTRY.add("warp_front_depth_camera_falcon", camera.warp_front_depth_camera_falcon)
     TERRAIN_REGISTRY.add("terrain_locomotion_multi", terrain.terrain_locomotion_multi)
     TERRAIN_REGISTRY.add("terrain_locomotion_multi_falcon", terrain.terrain_locomotion_multi_falcon)
     TERRAIN_REGISTRY.add("terrain_locomotion_multi_falcon_expert", terrain.terrain_locomotion_multi_falcon_expert)

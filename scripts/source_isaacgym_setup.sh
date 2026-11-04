@@ -18,4 +18,6 @@ if [ ! -f "$HOLOSOMA_DIR/scripts/source_isaacgym_setup.sh" ]; then
 fi
 echo "[rpl] Using holosoma from $HOLOSOMA_DIR"
 if [ -n "${ENV_NAME:-}" ]; then export CONDA_ENV_NAME="$ENV_NAME"; fi
+# Holosoma appends to this variable; launchers may enable nounset in a fresh shell.
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 source "$HOLOSOMA_DIR/scripts/source_isaacgym_setup.sh"

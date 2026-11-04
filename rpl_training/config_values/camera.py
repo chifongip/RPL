@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from holosoma.config_types.camera import CameraManagerCfg, CameraPose, CameraProps, CameraTermCfg
 
 _g1_dynamic_meshes = {
@@ -120,4 +122,19 @@ warp_dual_depth_cameras_falcon = CameraManagerCfg(
             },
         ),
     }
+)
+
+# Preserve front-camera geometry, noise and timing from the dual-camera rig.
+_dual_depth_term = warp_dual_depth_cameras_falcon.terms["warp_depth"]
+warp_front_depth_camera_falcon = replace(
+    warp_dual_depth_cameras_falcon,
+    terms={
+        "warp_depth": replace(
+            _dual_depth_term,
+            params={
+                **_dual_depth_term.params,
+                "poses": {"front_depth": _dual_depth_term.params["poses"]["front_depth"]},
+            },
+        ),
+    },
 )

@@ -139,6 +139,18 @@ g1_29dof_rpl_depth = InferenceConfig(
     camera=rpl_dual_depth,
 )
 
+# Use with the front-only sim config and an explicitly supplied single-camera export.
+rpl_front_depth = replace(rpl_dual_depth, poses={"cam_front_depth": rpl_dual_depth.poses["cam_front_depth"]})
+rpl_front_depth_observation = replace(
+    rpl_depth_observation, obs_dims={**rpl_depth_observation.obs_dims, "cam_depth": 27 * 48}
+)
+g1_29dof_rpl_depth_front = replace(
+    g1_29dof_rpl_depth,
+    camera=rpl_front_depth,
+    observation=rpl_front_depth_observation,
+    task=replace(rpl_depth_task, model_path=""),
+)
+
 
 def register() -> None:
     """Add the presets to ``holosoma_inference``'s registries (idempotent)."""
@@ -146,7 +158,9 @@ def register() -> None:
     OBSERVATION_REGISTRY.add("rpl-depth", rpl_depth_observation)
     TASK_REGISTRY.add("rpl-depth", rpl_depth_task)
     CAMERA_REGISTRY.add("rpl-dual-depth", rpl_dual_depth)
+    CAMERA_REGISTRY.add("rpl-front-depth", rpl_front_depth)
     INFERENCE_REGISTRY.add("g1-29dof-rpl-depth", g1_29dof_rpl_depth)
+    INFERENCE_REGISTRY.add("g1-29dof-rpl-depth-front", g1_29dof_rpl_depth_front)
 
 
 register()
