@@ -242,7 +242,14 @@ bash rpl_sim2sim/run_policy.sh inference:g1-29dof-rpl-depth-front \
 
 Supply your front-only export explicitly; the shipped ONNX models use two cameras.
 
+## Agibot X2 Ultra preparation
 
+X2 parameter derivation and model-structure checks are complete for a proposed
+29-joint simulation baseline. X2 training and sim2sim integration remain to be
+implemented; the launch commands above use G1.
+
+See the [X2 preparation status and implementation plan](docs/x2_ultra_training_review.md)
+and [generated parameter reference](docs/x2_ultra_parameters.md).
 
 ## Citation
 
