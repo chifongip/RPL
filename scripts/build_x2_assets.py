@@ -61,7 +61,8 @@ def build(source, destination):
     spec = mujoco.MjSpec.from_file(str(urdf_path))
     spec.body("pelvis").add_freejoint(name="floating_base_joint")
     spec.body("pelvis").pos = d["home_root_position"]
-    spec.compile()
+    # to_xml() compiles internally. Compiling first mutates fixed-link fusion
+    # state, so a second compilation loses head/sensor/hand geom transforms.
     xml = ET.fromstring(spec.to_xml())
     # Serialize full-precision merged URDF inertias explicitly. The URDF
     # importer/to_xml path can omit fixed-head inertia and rounds other values.

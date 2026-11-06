@@ -43,6 +43,38 @@ def test_collisions_are_from_training_urdf(model):
         np.testing.assert_allclose(model.geom_size[indices, 0], 0.005)
 
 
+def test_robot_geom_transforms_match_urdf(model):
+    """Fixed-link fusion must preserve visual and collision placement."""
+    spec = mujoco.MjSpec.from_file(str(ASSET_DIR / "x2_ultra_29dof.urdf"))
+    spec.body("pelvis").add_freejoint()
+    source = spec.compile()
+
+    def geometry(model):
+        data = mujoco.MjData(model)
+        mujoco.mj_forward(model, data)
+        root = data.xpos[model.body("pelvis").id]
+        result = {}
+        for i in range(model.ngeom):
+            if model.geom_bodyid[i] == 0:
+                continue
+            mesh = int(model.geom_dataid[i])
+            key = (
+                model.body(model.geom_bodyid[i]).name,
+                int(model.geom_type[i]),
+                model.mesh(mesh).name if mesh >= 0 else None,
+            )
+            result.setdefault(key, []).append((data.geom_xpos[i] - root, data.geom_xmat[i]))
+        return result
+
+    expected, actual = geometry(source), geometry(model)
+    assert actual.keys() == expected.keys()
+    for key in expected:
+        assert len(actual[key]) == len(expected[key]), key
+        for (pos, rotation), (source_pos, source_rotation) in zip(actual[key], expected[key]):
+            np.testing.assert_allclose(pos, source_pos, atol=2e-6, err_msg=str(key))
+            np.testing.assert_allclose(rotation, source_rotation, atol=2e-6, err_msg=str(key))
+
+
 def test_camera_geometry_and_initial_state(model):
     data = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
