@@ -242,14 +242,22 @@ bash rpl_sim2sim/run_policy.sh inference:g1-29dof-rpl-depth-front \
 
 Supply your front-only export explicitly; the shipped ONNX models use two cameras.
 
-## Agibot X2 Ultra preparation
+## Agibot X2 Ultra
 
-X2 parameter derivation and model-structure checks are complete for a proposed
-29-joint simulation baseline. X2 training and sim2sim integration remain to be
-implemented; the launch commands above use G1.
+X2 includes a head-fixed 29-joint robot model, G1-derived expert/distillation
+presets, a four-GPU training launcher and MuJoCo sim2sim. The commands above
+continue to select G1. For X2, use:
 
-See the [X2 preparation status and implementation plan](docs/x2_ultra_training_review.md)
-and [generated parameter reference](docs/x2_ultra_parameters.md).
+```bash
+TASK=stairs bash rpl_training/training_runs/run_x2.sh
+```
+
+X2 defaults to four GPUs for stones/stairs and one GPU for flat ground/slopes. The dual-camera
+student uses four GPUs with 2,048 environments each (8,192 total), preserving the
+reference student's global rollout size.
+
+See the [X2 runtime guide](docs/x2_ultra_training_review.md) for teacher setup,
+sim2sim and single-GPU smoke tests, plus the [parameter reference](docs/x2_ultra_parameters.md).
 
 ## Citation
 

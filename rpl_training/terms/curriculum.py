@@ -241,6 +241,10 @@ class MotionTimeTerrainCurriculum(CurriculumTermBase):
         move_up = move_up & self.env.time_out_buf[idx]
 
         remaining_motion_time = torch.clamp(motion_len[idx] - motion_start_times[idx], min=0.0)
+        if not getattr(self.env, 'motion_reference_enabled', True):
+            # Fixed-reference robots have no clip duration. Use the matched
+            # episode horizon so the terrain curriculum can still move down.
+            remaining_motion_time = torch.full_like(remaining_motion_time, self.env.max_episode_length_s)
         move_down = (
             distance
             < torch.norm(self.env.command_manager.commands[idx, :2], dim=1) * remaining_motion_time * move_down_ratio

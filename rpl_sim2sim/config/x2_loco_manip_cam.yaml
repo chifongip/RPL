@@ -1,0 +1,189 @@
+ROBOT_SCENE: ../rpl_training/data/robots/x2/scene.xml
+DOMAIN_ID: 0
+INTERFACE: lo
+USE_JOYSTICK: false
+JOYSTICK_TYPE: xbox
+JOYSTICK_DEVICE: 0
+SIMULATE_DT: 0.005
+VIEWER_DT: 0.02
+ENABLE_ELASTIC_BAND: true
+BAND_ATTACHED_LINK: torso_link
+USE_RENDERER: false
+ROBOT_CFG:
+  ROBOT_TYPE: x2_29dof
+  FREE_BASE: true
+  USE_SENSOR: false
+  NUM_MOTORS: 29
+  NUM_JOINTS: 29
+  motor_effort_limit_list:
+  - 120.0
+  - 120.0
+  - 120.0
+  - 120.0
+  - 36.0
+  - 24.0
+  - 120.0
+  - 120.0
+  - 120.0
+  - 120.0
+  - 36.0
+  - 24.0
+  - 120.0
+  - 48.0
+  - 48.0
+  - 36.0
+  - 36.0
+  - 24.0
+  - 24.0
+  - 24.0
+  - 4.8
+  - 4.8
+  - 36.0
+  - 36.0
+  - 24.0
+  - 24.0
+  - 24.0
+  - 4.8
+  - 4.8
+  cameras:
+    poses:
+      cam_front_depth: {}
+      cam_back_depth: {}
+    props:
+      image_type: depth
+      width: 240
+      height: 135
+      if_resize: true
+      resized_width: 48
+      resized_height: 27
+      horizontal_fov: 101.41
+      vertical_fov: 69.0
+      near_clip: 0.1
+      far_clip: 2.0
+      frame_rate: 10
+      image_show: false
+      depth_delay: 2
+      native_renderer: true
+      clip_before_resize: true
+  dof_names:
+  - left_hip_pitch_joint
+  - left_hip_roll_joint
+  - left_hip_yaw_joint
+  - left_knee_joint
+  - left_ankle_pitch_joint
+  - left_ankle_roll_joint
+  - right_hip_pitch_joint
+  - right_hip_roll_joint
+  - right_hip_yaw_joint
+  - right_knee_joint
+  - right_ankle_pitch_joint
+  - right_ankle_roll_joint
+  - waist_yaw_joint
+  - waist_pitch_joint
+  - waist_roll_joint
+  - left_shoulder_pitch_joint
+  - left_shoulder_roll_joint
+  - left_shoulder_yaw_joint
+  - left_elbow_joint
+  - left_wrist_yaw_joint
+  - left_wrist_pitch_joint
+  - left_wrist_roll_joint
+  - right_shoulder_pitch_joint
+  - right_shoulder_roll_joint
+  - right_shoulder_yaw_joint
+  - right_elbow_joint
+  - right_wrist_yaw_joint
+  - right_wrist_pitch_joint
+  - right_wrist_roll_joint
+  default_joint_angles:
+  - -0.1
+  - 0.0
+  - 0.0
+  - 0.3
+  - -0.2
+  - 0.0
+  - -0.1
+  - 0.0
+  - 0.0
+  - 0.3
+  - -0.2
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.35
+  - 0.1
+  - 0.0
+  - -0.87
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.35
+  - -0.1
+  - 0.0
+  - -0.87
+  - 0.0
+  - 0.0
+  - 0.0
+  motor_kp:
+  - 120.0
+  - 100.0
+  - 100.0
+  - 150.0
+  - 40.0
+  - 40.0
+  - 120.0
+  - 100.0
+  - 100.0
+  - 150.0
+  - 40.0
+  - 40.0
+  - 40.18
+  - 200.0
+  - 200.0
+  - 50.0
+  - 50.0
+  - 50.0
+  - 50.0
+  - 20.0
+  - 20.0
+  - 20.0
+  - 50.0
+  - 50.0
+  - 50.0
+  - 50.0
+  - 20.0
+  - 20.0
+  - 20.0
+  motor_kd:
+  - 5.0
+  - 4.0
+  - 4.0
+  - 5.0
+  - 2.0
+  - 2.0
+  - 5.0
+  - 4.0
+  - 4.0
+  - 5.0
+  - 2.0
+  - 2.0
+  - 2.56
+  - 2.0
+  - 2.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 2.0
+  - 2.0
+  - 2.0
+INITIAL_KEYFRAME: home
+HOLD_HOME: true

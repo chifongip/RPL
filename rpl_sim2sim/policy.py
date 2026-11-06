@@ -20,6 +20,7 @@ Runs the decoupled lower/upper-body student exported by DAgger-MA distillation
 
 from __future__ import annotations
 
+import json
 from collections import deque
 from enum import Enum, auto
 
@@ -117,7 +118,21 @@ class RplDepthPolicy(LocomotionPolicy):
     # Match training's default stand_vel_threshold (m/s for XY, rad/s for yaw).
     stand_vel_threshold = 0.1
 
+    def setup_policy(self, model_path):
+        super().setup_policy(model_path)
+        if self.config.robot.robot_type == "x2_29dof":
+            metadata = self.onnx_policy_session.get_modelmeta().custom_metadata_map
+            names = json.loads(metadata.get("dof_names", "[]"))
+            experiment = json.loads(metadata.get("experiment_config", "{}"))
+            if (
+                names != list(self.config.robot.dof_names)
+                or experiment.get("robot", {}).get("asset", {}).get("robot_type") != "x2_29dof"
+            ):
+                raise ValueError("X2 inference requires an X2 export; G1 policies are incompatible")
+
     def __init__(self, config):
+        if config.robot.robot_type == "x2_29dof":
+            self.enable_arm_ik = False  # X2 baseline uses HOME; never load G1 IK.
         super().__init__(config)
         robot = self.config.robot
         upper_indices = [robot.dof_names.index(n) for n in robot.dof_names_upper_body]
@@ -237,13 +252,21 @@ class RplDepthPolicy(LocomotionPolicy):
     def _init_depth_sensor(self) -> None:
         camera = self.config.camera
         if camera is None:
+            if self.config.robot.robot_type == "x2_29dof":
+                self.depth_sensor = None
+                return
             raise ValueError("RplDepthPolicy needs an inference camera config (num cameras + resized size).")
         shape = (camera.num_cameras, 1, camera.props.resized_height, camera.props.resized_width)
         shm_cfg = self.config.task.depth_shm
         heartbeat = (
             (shm_cfg.heartbeat_endpoint or f"ipc:///tmp/{shm_cfg.name}.heartbeat") if shm_cfg.heartbeat else None
         )
-        self.depth_sensor = DepthShmSensor(
+        sensor_class = DepthShmSensor
+        if self.config.robot.robot_type == "x2_29dof":
+            from rpl_sim2sim.depth_sensor import LocalDepthConsumer
+
+            sensor_class = LocalDepthConsumer
+        self.depth_sensor = sensor_class(
             shape=shape, name=shm_cfg.name, required=shm_cfg.required, heartbeat_endpoint=heartbeat
         )
         self.depth_sensor.start()
@@ -264,9 +287,14 @@ class RplDepthPolicy(LocomotionPolicy):
         obs = super().get_current_obs_buffer_dict(robot_state_data)
         # Absolute stance height (training's ``command_base_height``; nominal 0.75 m).
         obs["command_base_height"] = self.base_height_command
+        if self.config.robot.robot_type == "x2_29dof" and self.config.camera is None:
+            # The flat G1-derived preset observes height delta; terrain/depth
+            # teachers and students observe absolute commanded base height.
+            obs["command_base_height"] = self.base_height_command - self.desired_base_height
         obs["command_waist_dofs"] = self.waist_dofs_command
         obs["ref_upper_dof_pos"] = self.ref_upper_dof_pos
-        obs["cam_depth"] = self.depth_sensor.get_latest().reshape(1, -1)
+        if self.depth_sensor is not None:
+            obs["cam_depth"] = self.depth_sensor.get_latest().reshape(1, -1)
         return obs
 
     def _update_obs_history(self, current_obs_dict):
@@ -290,6 +318,11 @@ class RplDepthPolicy(LocomotionPolicy):
 
     def prepare_obs_for_rl(self, robot_state_data):
         groups = self._prepare_group_observations(robot_state_data)
+        if "perception_obs" not in groups:
+            return {
+                f"actor_obs_{key}": groups["actor_obs"].astype(np.float32, copy=False)
+                for key in ("lower_body", "upper_body")
+            }
         lower = np.concatenate([groups["actor_obs"], groups["perception_obs"], groups["command_lin_vel_obs"]], axis=1)
         return {
             "actor_obs_lower_body": lower.astype(np.float32, copy=False),
@@ -314,6 +347,8 @@ class RplDepthPolicy(LocomotionPolicy):
 
     def _check_depth_liveness(self) -> None:
         """Warn on stale depth; past ``stale_stop_s`` (or a failed producer) go back to the init pose."""
+        if self.depth_sensor is None:
+            return
         status = self.depth_sensor.liveness()
         if status is None or not status.checked:
             return  # heartbeat disabled, or no heartbeat received yet

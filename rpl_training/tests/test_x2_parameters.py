@@ -23,8 +23,21 @@ def parameters():
 
 
 def test_committed_parameters_are_reproducible(parameters):
-    assert parameters == json.loads((ROOT / 'docs/x2_ultra_parameters.json').read_text())
-    assert _module.report(parameters) == (ROOT / 'docs/x2_ultra_parameters.md').read_text()
+    def compare(actual, expected):
+        if isinstance(actual, dict):
+            assert actual.keys() == expected.keys()
+            for key in actual:
+                compare(actual[key], expected[key])
+        elif isinstance(actual, list):
+            assert len(actual) == len(expected)
+            for a, b in zip(actual, expected):
+                compare(a, b)
+        elif isinstance(actual, float):
+            assert actual == pytest.approx(expected, rel=1e-12, abs=1e-12)
+        else:
+            assert actual == expected
+    compare(parameters, json.loads((ROOT / 'docs/x2_ultra_parameters.json').read_text(encoding='utf-8')))
+    assert _module.report(parameters) == (ROOT / 'docs/x2_ultra_parameters.md').read_text(encoding='utf-8')
 
 
 def test_limits_home_and_name_mapping(parameters):

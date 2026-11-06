@@ -20,6 +20,7 @@ from holosoma_inference.config.config_values.robot import ROBOT_REGISTRY, g1_29d
 from holosoma_inference.config.config_values.task import TASK_REGISTRY, locomotion
 
 from rpl_sim2sim.policy import RplObservationConfig
+from rpl_training.x2 import DOF_NAMES, HOME, KD, KP, MODEL
 
 MODELS_DIR = Path(__file__).resolve().parent / "models"
 # DEFAULT_MODEL = MODELS_DIR / "rpl_original_model_19999.onnx"
@@ -151,16 +152,60 @@ g1_29dof_rpl_depth_front = replace(
     task=replace(rpl_depth_task, model_path=""),
 )
 
+# Unitree HG messages are used only as a local sim2sim transport. The robot
+# family selects the SDK transport implementation, not X2 kinematics/control.
+x2_29dof_rpl = replace(
+    g1_29dof_rpl,
+    robot_type="x2_29dof",
+    robot="g1",
+    dof_names=tuple(DOF_NAMES),
+    dof_names_lower_body=tuple(MODEL["lower_dof_names"]),
+    dof_names_upper_body=tuple(MODEL["upper_dof_names"]),
+    default_dof_angles=tuple(HOME),
+    default_motor_angles=tuple(HOME),
+    motor_kp=tuple(KP),
+    motor_kd=tuple(KD),
+    motor2joint=tuple(range(29)),
+    joint2motor=tuple(range(29)),
+    default_per_joint_action_scale=(0.25,) * 29,
+    left_hand_link_name="left_wrist_roll_link",
+    right_hand_link_name="right_wrist_roll_link",
+)
+x2_dual_depth = replace(
+    rpl_dual_depth,
+    poses={
+        "cam_front_depth": replace(rpl_dual_depth.poses["cam_front_depth"], camera_offset=(0.135, 0.06, 0.02)),
+        "cam_back_depth": replace(rpl_dual_depth.poses["cam_back_depth"], camera_offset=(-0.125, -0.06, 0.02)),
+    },
+)
+x2_29dof_rpl_depth = replace(
+    g1_29dof_rpl_depth,
+    robot=x2_29dof_rpl,
+    camera=x2_dual_depth,
+    task=replace(rpl_depth_task, model_path="", desired_base_height=0.68),
+)
+x2_flat_observation = replace(
+    rpl_depth_observation,
+    obs_dict={"actor_obs": rpl_depth_observation.obs_dict["actor_obs"]},
+    history_length_dict={"actor_obs": 5},
+    obs_intervals={"actor_obs": 1},
+)
+x2_29dof_rpl_flat = replace(x2_29dof_rpl_depth, camera=None, observation=x2_flat_observation)
+
 
 def register() -> None:
     """Add the presets to ``holosoma_inference``'s registries (idempotent)."""
     ROBOT_REGISTRY.add("g1-29dof-rpl", g1_29dof_rpl)
+    ROBOT_REGISTRY.add("x2-29dof-rpl", x2_29dof_rpl)
     OBSERVATION_REGISTRY.add("rpl-depth", rpl_depth_observation)
     TASK_REGISTRY.add("rpl-depth", rpl_depth_task)
     CAMERA_REGISTRY.add("rpl-dual-depth", rpl_dual_depth)
     CAMERA_REGISTRY.add("rpl-front-depth", rpl_front_depth)
+    CAMERA_REGISTRY.add("x2-dual-depth", x2_dual_depth)
     INFERENCE_REGISTRY.add("g1-29dof-rpl-depth", g1_29dof_rpl_depth)
     INFERENCE_REGISTRY.add("g1-29dof-rpl-depth-front", g1_29dof_rpl_depth_front)
+    INFERENCE_REGISTRY.add("x2-29dof-rpl-depth", x2_29dof_rpl_depth)
+    INFERENCE_REGISTRY.add("x2-29dof-rpl-flat", x2_29dof_rpl_flat)
 
 
 register()

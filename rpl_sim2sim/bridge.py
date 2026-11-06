@@ -19,6 +19,8 @@ from unitree_sdk2py.idl.unitree_go.msg.dds_ import WirelessController_
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
 from unitree_sdk2py.utils.crc import CRC
 
+from rpl_sim2sim.joint_mapping import JointMapping
+
 # Wireless-controller bit order of the Unitree remote.
 KEY_MAP = {
     "R1": 0, "L1": 1, "start": 2, "select": 3, "R2": 4, "L2": 5, "F1": 6, "F2": 7,
@@ -49,7 +51,8 @@ class UnitreeSdk2Bridge:
         self.mj_model = mj_model
         self.mj_data = mj_data
         self.free_base = robot_config["FREE_BASE"]
-        self.num_motor = self.mj_model.nu - 6 if self.free_base else self.mj_model.nu
+        self.joints = JointMapping(mj_model, robot_config.get("dof_names"))
+        self.num_motor = len(self.joints.names)
         self.torques = np.zeros(self.num_motor)
         self.torque_limit = np.array(robot_config["motor_effort_limit_list"])
         self.use_sensor = robot_config["USE_SENSOR"]  # True: use sensor data; False: use ground truth data
@@ -83,10 +86,10 @@ class UnitreeSdk2Bridge:
         motor_state = self.low_state.motor_state
         for i in range(self.num_motor):
             m = motor_state[i]
-            m.q = qpos[7 + i]
-            m.dq = qvel[6 + i]
-            m.ddq = qacc[6 + i]
-            m.tau_est = actuator_force[6 + i] if self.free_base else actuator_force[i]
+            m.q = qpos[self.joints.qpos[i]]
+            m.dq = qvel[self.joints.qvel[i]]
+            m.ddq = qacc[self.joints.qvel[i]]
+            m.tau_est = actuator_force[self.joints.actuators[i]]
         imu.quaternion[:] = qpos[3:7]
         imu.gyroscope[:] = qvel[3:6]
         imu.accelerometer[:] = qacc[0:3]

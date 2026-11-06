@@ -1,0 +1,7 @@
+<mujoco model="x2_flat">
+  <include file="x2_ultra_29dof.xml" />
+  <worldbody>
+    <geom name="floor" type="plane" size="0 0 0.05" contype="2" conaffinity="1" friction="1 0.005 0.0001" rgba="0.8 0.85 0.9 1" />
+    <light pos="0 0 3" />
+  </worldbody>
+</mujoco>

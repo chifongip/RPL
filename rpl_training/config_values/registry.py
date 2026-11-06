@@ -14,9 +14,10 @@ from holosoma.config_values.robot import ROBOT_REGISTRY
 from holosoma.config_values.simulator import SIMULATOR_REGISTRY
 from holosoma.config_values.terrain import TERRAIN_REGISTRY
 
-from rpl_training.config_values import camera, experiment, robot, simulator, terrain
+from rpl_training.config_values import camera, experiment, robot, simulator, terrain, x2
 
 EXPERIMENTS = {
+    **x2.EXPERIMENTS,
     # Per-terrain RL experts (FALCON ``+exp=falcon_hm_multi_terrain algo=ppo_ma_hm_cnn``).
     "g1_29dof_rpl_expert": experiment.g1_29dof_rpl_expert,
     # FALCON's final expert stages per terrain.
@@ -40,6 +41,8 @@ def register() -> None:
     TERRAIN_REGISTRY.add("terrain_locomotion_multi_falcon_expert", terrain.terrain_locomotion_multi_falcon_expert)
     SIMULATOR_REGISTRY.add("isaacgym_falcon", simulator.isaacgym_falcon)
     ROBOT_REGISTRY.add("g1_29dof_falcon", robot.g1_29dof_falcon)
+    ROBOT_REGISTRY.add("x2_29dof", x2.x2_29dof)
+    CAMERA_MANAGER_REGISTRY.add("x2_dual_depth", x2.x2_dual_depth)
 
 
 register()

@@ -1,98 +1,159 @@
-# Agibot X2 Ultra: preparation status and implementation plan
+# Agibot X2 Ultra runtime integration
 
-**Current stage: parameter derivation is complete for the proposed simulation baseline. Runtime integration has not started.** The repository still launches G1 experiments and G1 sim2sim. No persistent X2 29-joint assets, training/inference presets, trained policies or X2 launch commands have been added.
+X2 runtime integration is implemented for IsaacGym training and MuJoCo sim2sim. Portable head-fixed assets, robot/experiment presets, the dual-camera rig, inference presets and a four-GPU launcher are included. Short local smoke checkpoints are integration artifacts; they are not trained locomotion policies. Full training has not been launched.
 
-The scope is IsaacGym training and MuJoCo sim2sim. Hardware communication, identification, physical camera calibration and real-robot trials are deferred.
+Hardware communication and real-robot deployment remain outside this scope. Unitree HG messages are used as a local simulation transport on loopback, not as an Agibot hardware interface.
 
-## Documentation
+## Robot and training configuration
 
-| Document | Purpose | How to update |
+The selected robot has 29 actions: 12 leg + 3 waist joints in the lower body and 14 arm joints in the upper body. Head yaw and pitch are fixed at zero with head mass and inertia preserved. PD gains use `agibot_stiff`, and initial/default joint positions use `HOME_KEYFRAME`, both from the previously selected constants file. No other values are adopted from that file.
+
+The [parameter reference](x2_ultra_parameters.md) and [JSON](x2_ultra_parameters.json) contain ordered gains, limits, HOME, inertias, geometry and camera transforms. Runtime constants load the packaged snapshot under `rpl_training/data/robots/x2`, so training on another machine does not require either original absolute source path.
+
+| Configuration | Relationship to G1 |
+| --- | --- |
+| PPO/DAgger networks, learning rates, rollout length, minibatches and iterations | Inherited from corresponding G1 presets; no X2 PPO loss or optimizer override |
+| Terrain-expert reward weights, terrain distributions and domain randomization | Inherited from corresponding G1 presets; end-effector acceleration rewards select X2 wrist-roll end links |
+| Environment allocation | G1 global totals retained: stones/stairs/generic expert 16,384; slopes 4,096; depth student 8,192 |
+| Physics / policy frequency | Preserved at 200 Hz / 50 Hz; PD torques recomputed each physics step |
+| Torso/base-height commands | Same task interpretation and curriculum; nominal height changed to 0.68 m |
+| Robot dynamics and geometry | X2 vendor parameters with a symmetric simulation waist-yaw range, simplified collisions, per-joint armature 0.03, joint friction 0.3, selected gains/HOME and derived foot samples |
+| Upper-body references | Fixed HOME arms (`motion=None`); G1 joint-space clips are not reused |
+| Hand forces and interactive hand IK | Disabled for this baseline |
+| Symmetry augmentation | Enabled for flat/expert PPO with G1 coefficients (actor 1, critic 0); depth DAgger unchanged |
+| Episode horizon | Explicit 10 s, matching G1's standardized motion duration without requiring a motion library |
+
+The fixed-reference terrain curriculum uses the episode horizon when no motion library is active; otherwise its move-down criterion would see a zero-duration clip. G1 motion-enabled behavior is preserved.
+
+Despite the name `waist_pitch`, RPL tracks desired torso tilt through projected gravity. Hip/leg and pelvis motion can compensate for limited waist travel. Torso pitch commands retain the G1 range and are not clamped to waist-pitch joint limits. Yaw separately tracks the waist-yaw joint.
+
+## Joint order
+
+X2 retains its native vendor order throughout IsaacGym, observations, lower/upper actor outputs, ONNX metadata, DDS motor arrays and MuJoCo. G1 joint vectors must not be substituted by index. Legs and shoulder/elbow ordering match G1; these zero-based indices differ:
+
+| Indices | G1 | X2 |
 | --- | --- | --- |
-| This page | Agreed scope, current evidence and implementation sequence | Edit directly as work progresses |
-| [Parameter reference](x2_ultra_parameters.md) | Ordered joint table, geometry, camera transforms and proposed simulation settings | Regenerate with the derivation script |
-| [Parameter JSON](x2_ultra_parameters.json) | Full-precision arrays, merged inertias, mesh transforms and source hashes | Regenerate with the derivation script |
+| 12–14 | waist yaw, roll, pitch | waist yaw, pitch, roll |
+| 19–21 | left wrist roll, pitch, yaw | left wrist yaw, pitch, roll |
+| 26–28 | right wrist roll, pitch, yaw | right wrist yaw, pitch, roll |
 
-The generated files record model-derived values separately from inherited or proposed settings. Timing, action scaling, friction settings, reward thresholds and randomization ranges are simulation assumptions or task choices; robot geometry does not determine them.
+The lower actor covers indices 0–14 and the upper actor 15–28. Gains, HOME, limits and symmetry signs are associated with X2 joint names. The MuJoCo bridge resolves named state addresses and actuators explicitly. The G1 transport family selects the local message implementation and does not reorder X2 joints.
 
-## Agreed robot definition
+The task command vector deliberately remains **yaw, roll, pitch**, independent of X2's joint order. Its roll/pitch entries describe desired torso orientation; they are not copied into waist joint targets. Training rewards, command reflection and inference controls retain this semantic order. Changing command order to match the joint array would introduce an error.
 
-| Item | Decision |
-| --- | --- |
-| Robot | Agibot X2 Ultra from `/home/ubuntu/agibot_x2_urdf/X2_URDF-v1.3.0` |
-| Head | Fix yaw and pitch at zero, preserving head mass, inertia and geometry |
-| Actions | 29: 12 leg + 3 waist joints in the lower body; 14 arm joints in the upper body |
-| PD gains | `X2_GAIN_PRESETS["agibot_stiff"]` from the reference constants file below |
-| Standing pose | `HOME_KEYFRAME` from the same file, including nominal pelvis height 0.68 m |
-| Cameras | G1 dual front/back torso-mounted training rig, with X2 meshes for self-occlusion |
-| Torso commands | Preserve RPL's whole-body interpretation and initial range/curriculum; assess feasibility through simulation |
+Regression checks cover every joint with individual PD action/velocity inputs, axis-derived reflection signs, nonzero observation histories, named bridge states/commands, native IsaacGym limits and ordered export metadata.
 
-The gain/pose reference is `/home/ubuntu/unitree_rl_mjlab/src/assets/robots/agibot_x2/x2_constants.py`. Only the named PD gains and standing pose are adopted from it. All numerical values are listed in the parameter reference rather than repeated here.
+## Symmetry and waist yaw
 
-Despite the name `waist_pitch`, RPL rewards desired torso tilt through projected gravity. Hip/leg and pelvis motion can compensate for limited waist travel. Do not clamp torso pitch commands to X2's waist-pitch joint limits. The yaw reward separately tracks the waist-yaw joint.
+Keep the core learning algorithm unchanged. X2 uses the same PPO trainer, symmetry augmentation, action term and environment classes as the corresponding G1 preset. Symmetry coefficients remain actor 1 and critic 0. There is no X2 PPO loss override, reflection mask or additional distributed-loss guard. The X2 DAgger subclass only selects/validates teacher checkpoint compatibility; it does not change the distillation update.
 
-### Camera mounting preview
+The source vendor waist-yaw limits are `[-3.43, 2.2078]` rad. The asset generator applies symmetric **simulation hard stops** of `[-2.2078, 2.2078]` rad to the packaged URDF. MuJoCo is converted from this adapted URDF, and the runtime robot configuration uses the same override. Vendor source files and their original limits in the parameter reference remain unchanged. The standard 95% soft-limit fraction therefore gives `±2.09741` rad without an environment wrapper. Yaw commands retain G1's `±1` rad range.
 
-![X2 with the selected front and back torso camera mounts and fields of view](assets/x2_camera_mounts.png)
+Joint PD targets retain G1's behavior: there is no additional position-target clamp in training or inference. Narrowing the simulation articulation's hard stops is a model adaptation, not a PPO change. Vendor geometry/inertias retain their small left/right differences, so reflection remains approximate. The artificial negative-side hard stop must be removed for a later evaluation against original vendor limits before hardware deployment.
 
-The MuJoCo capture uses HOME and the derived camera transforms. Blue marks the front camera and orange the back camera. Housings and frustum lengths are illustrative; mount positions and viewing axes follow the selected simulation rig. Both cameras sit near the lower torso and look 75 degrees downward from horizontal.
+## Assets and cameras
 
-Regenerate with `/home/ubuntu/.holosoma_deps/miniconda3/envs/rplmujoco/bin/python scripts/render_x2_camera_mounts.py` on a machine with EGL rendering support. This preview creates the head-fixed model in memory and does not modify runtime assets or presets.
+The runtime URDF comes from the vendor simplified-collision URDF. Its MuJoCo counterpart is converted from that same file, with full-precision merged inertias written explicitly. This avoids dropping fixed-head mass during conversion. Both runtimes have 30 robot bodies and 29 articulated joints; MuJoCo has `nq=36`, `nv=35`, `nu=29`.
 
-## Source assets and derived findings
+The vendor full URDF has 41 links, while the simplified URDF has 39 and omits the fixed `base_link` and `lidar_chest_front` frames. All required meshes and the vendor Mulan PSL v2 license are packaged. The alternate `x2_ultra_simplified.xml` and `x2_fist` variant are not runtime sources.
 
-The simplified-collision URDF is the proposed training geometry source; MuJoCo geometry must be checked against it during integration. Vendor files remain unchanged.
+![Selected X2 torso camera mounts](assets/x2_camera_mounts.png)
 
-| Source asset | Relevant findings |
-| --- | --- |
-| `x2_ultra.urdf` | Full model: 41 links and 31 moving joints |
-| `x2_ultra_simple_collision.urdf` | 39 links, the same moving-joint transforms/limits; collision geometry mixes meshes and primitives |
-| `x2_ultra.xml` | Vendor MuJoCo model used for independent forward-kinematics checks and the in-memory head-exclusion test |
+Blue marks the front camera and orange the back camera. The selected G1 training rig is attached to `torso_link`, near the lower torso, looking 75 degrees downward. Housings and frustum lengths are illustrative. Camera offsets, optical axes, FOV, 240×135 rendering, 48×27 images, 10 Hz capture and two-frame history follow the selected training configuration.
 
-The simplified URDF omits the full model's fixed `base_link` and `lidar_chest_front` frames. The local `x2_ultra_simplified.xml` is an alternative asset and is not the source for the parameter derivation. The `x2_fist` files describe a different robot variant.
+X2 self-occlusion meshes bake fixed-head/sensor transforms into retained bodies. MuJoCo uses the corresponding optical-frame conversion, two-frame image delay, clip-before-resize processing and antialiased bicubic resizing. The NumPy resize implementation is checked against training's Torch operation. Training camera noise and pose/FOV randomization are retained; MuJoCo evaluation uses the nominal rig. Full rendered scene parity across the two physics engines is not claimed.
 
-Key derived findings:
+At HOME, foot surfaces begin about 13.49 mm above flat ground. Joint PD alone does not balance the untrained floating robot. The interactive simulator therefore starts with a support band; release it with `9` when a suitable policy is running.
 
-- Head-fixed model: 29 articulated joints, an expected 30 collapsed robot bodies, and MuJoCo dimensions `nq=36`, `nv=35`, `nu=29`. IsaacGym's actual loaded body ordering remains to be checked.
-- URDF mass is 41.966521 kg, including 1.719334 kg of preserved head mass. The vendor XML differs by approximately 0.000048 kg; tests allow that source difference.
-- Each simplified foot has 12 collision spheres, with 10 at the lowest sole level. At HOME, the lowest surfaces start approximately 13.49 mm above flat ground. Keep the selected initialization and validate settling; the calculated contact height is not a tested standing equilibrium.
-- X2 waist and wrist joint order differs from G1. After excluding head joints and motors, the vendor XML's remaining joint and actuator orders agree with the URDF traversal. Runtime mappings still need verification.
-- The existing G1 sim2sim camera offsets and delay differ slightly from the selected G1 training rig. X2 sim2sim must explicitly reproduce the selected rig and its optical-frame conversion.
+## Four-GPU full training
 
-## Validation completed
+The target is **one machine with four GPUs**. Install the existing training environment on that machine as described in the repository README. The launcher defaults to one GPU for `TASK=flat` and `TASK=slopes`, and four GPUs for other stages. Flat ground follows the G1 repository default; terrain teachers follow the recorded G1 allocations. Multi-GPU jobs use the existing single-node `torchrun` path. Set `NGPUS` explicitly to override the stage default. `--training.num-envs` is the total across all GPUs. No four-GPU run was attempted on the current single-GPU computer.
 
-The [derivation script](../scripts/derive_x2_parameters.py) and [seven tests](../rpl_training/tests/test_x2_parameters.py) check:
+```bash
+# Optional flat-ground baseline: 1 GPU, 4096 environments.
+TASK=flat bash rpl_training/training_runs/run_x2.sh --training.name x2-flat
 
-- Regeneration of both numerical artifacts from the local sources.
-- Gain coverage, HOME within hard joint limits, and head-excluded joint/actuator ordering.
-- Physical source inertia tensors and mass conservation through fixed-link merging.
-- Foot geometry, HOME mirror consistency and conversion between action offsets and joint limits.
-- Camera rotation orthonormality and the analytical Warp-to-MuJoCo viewing-axis conversion.
-- Independent HOME forward kinematics and COM against the original vendor MuJoCo model.
-- Successful compilation of an in-memory head-fixed MuJoCo model, with 29 actuators and preserved mass.
+# Train new X2 terrain experts; each command is a separate training job.
+TASK=stones bash rpl_training/training_runs/run_x2.sh --training.name x2-stones
+TASK=stairs bash rpl_training/training_runs/run_x2.sh --training.name x2-stairs
+TASK=slopes bash rpl_training/training_runs/run_x2.sh --training.name x2-slopes
+```
 
-These are derivation and model-structure checks. Settled standing, IsaacGym import, rendered camera parity, training, policy export and closed-loop sim2sim have not been tested. The in-memory model is not a saved training asset.
+The target GPUs have the same stated 48 GB memory capacity as the reference L40S GPUs. Retain G1's global rollout size; the four-GPU student therefore has more environments per GPU than the eight-GPU reference:
 
-To reproduce from the repository root using the existing local environment:
+| Stage | Reference G1 | X2 on the four-GPU machine | Global environments |
+| --- | --- | --- | --- |
+| Optional flat baseline | Repository default: 1 GPU × 4,096 | 1 GPU × 4,096 | 4,096, unchanged |
+| Stones teacher | 4 GPUs × 4,096 | 4 GPUs × 4,096 | 16,384, unchanged |
+| Stairs teacher | 4 GPUs × 4,096 | 4 GPUs × 4,096 | 16,384, unchanged |
+| Slopes teacher | 1 GPU × 4,096 | 1 GPU × 4,096 | 4,096, unchanged |
+| Dual-camera student | 8 GPUs × 1,024 | 4 GPUs × 2,048 | 8,192, unchanged |
+
+Presets retain 50,000 expert iterations and 20,000 student iterations, as well as G1's learning rates, rollout lengths, epochs and minibatch counts. Global rollout batches and sampled transitions over the same iteration count are preserved. The student keeps 8,192 environments × 24 steps = 196,608 transitions per rollout. No gradient accumulation or automatic rollout-length/iteration scaling is added. W&B remains the default logger; use `LOGGER=disabled` for local logging. The student's per-GPU environment count doubles relative to the reference. Actual memory use and throughput still need measuring on the target machine; equal VRAM capacity alone does not establish either.
+
+Prepare a teacher directory with one run directory per terrain key:
+
+```text
+/path/to/x2-teachers/
+  slopes/RUN/model_XXXXX.pt
+  stairs_up/RUN/model_XXXXX.pt
+  stairs_down/RUN/model_XXXXX.pt
+  stepping_stones_columns/RUN/model_XXXXX.pt
+```
+
+Use the slopes expert for `slopes`, stones for `stepping_stones_columns`, and explicitly supply the shared stairs expert for both stairs keys if training one policy for both directions. Local selection uses the latest lexicographically sorted run/checkpoint path; keep the directory unambiguous. Per-terrain W&B overrides from the G1 workflow are also supported. The X2 teacher loader validates checkpoint robot identity and joint order, and rejects G1 teachers.
+
+```bash
+TASK=distill bash rpl_training/training_runs/run_x2.sh \
+  --training.name x2-depth \
+  --algo.config.ckpt-teacher /path/to/x2-teachers
+```
+
+## Sim2sim
+
+Start the simulator, then the corresponding policy in another terminal:
+
+```bash
+bash rpl_sim2sim/run_sim.sh --config rpl_sim2sim/config/x2_loco_manip_cam.yaml
+
+# Flat export:
+bash rpl_sim2sim/run_policy.sh inference:x2-29dof-rpl-flat \
+  --task.model-path /absolute/path/to/flat/model_XXXXX.onnx \
+  --task.velocity-input keyboard --task.state-input keyboard
+
+# Or depth-student export:
+bash rpl_sim2sim/run_policy.sh inference:x2-29dof-rpl-depth \
+  --task.model-path /absolute/path/to/depth/model_XXXXX.onnx \
+  --task.velocity-input keyboard --task.state-input keyboard
+```
+
+Use `i` to initialize, `]` to start the policy, and `9` in the MuJoCo window to release the support band. The depth policy consumes both shared-memory camera streams. X2 inference validates ONNX robot identity and joint order. G1 IK stays disabled automatically. The current C++ local transport uses DDS domain 0 on `lo`; use that domain for both simulator and policy.
+
+Camera producer failures or missing frames stop physics and are propagated to the main process, including failures after the first successful frame. Shutdown joins workers and releases all renderers and shared memory even if a renderer fails to close. Stop an existing simulator before reusing its shared-memory name; duplicate producers are rejected.
+
+The bridge maps joint names to state addresses and actuator IDs explicitly, handling both X2's 29 motors and the legacy G1 model's six extra floating-base actuators. The flat policy observes a base-height delta; terrain teachers and the depth student observe absolute commanded height, matching their respective training presets.
+
+The bundled scene is flat ground. Held-out terrain courses and traversal evaluation remain subsequent work after training usable policies.
+
+## Local smoke tests
+
+Run the complete bounded suite on one GPU:
+
+```bash
+bash scripts/smoke_x2.sh
+```
+
+The suite runs regression tests, probes unrandomized IsaacGym mass/friction/names, trains flat/expert/depth models for three iterations each, checks PyTorch versus ONNX outputs, and launches actual simulator/policy processes over DDS and shared depth. Smoke runs use 32 environments and smaller terrain grids while preserving the terrain types. `ITERS` and `SMOKE_ENVS` override these test sizes. All smoke logging is local.
+
+For the distillation test only, the suite assigns the short generic X2 expert checkpoint to all four terrain routes. These test teachers validate loading and optimization; replace them with trained X2 terrain experts for full training.
+
+Logs and reports are written under `logs/x2-runtime-smoke/TIMESTAMP/`. The validation record is summarized in [runtime validation](x2_runtime_validation.md). Three-iteration checkpoints do not establish balance, command tracking, terrain traversal or sim-to-real readiness.
+
+To regenerate assets after changing the parameter reference:
 
 ```bash
 /home/ubuntu/.holosoma_deps/miniconda3/envs/rplmujoco/bin/python scripts/derive_x2_parameters.py
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/ubuntu/.holosoma_deps/miniconda3/envs/rplmujoco/bin/python -m pytest rpl_training/tests/test_x2_parameters.py -q -p no:cacheprovider
+/home/ubuntu/.holosoma_deps/miniconda3/envs/rplmujoco/bin/python scripts/build_x2_assets.py
 ```
 
-Alternatively, activate an environment with NumPy, pytest and MuJoCo and use `python`. The script accepts `--assets`, `--constants` and `--output` for different local paths. Tests use the default local source paths and skip derivation checks when those sources are absent; MuJoCo-dependent checks skip when MuJoCo is unavailable. The JSON stores local source paths and hashes, so regeneration on another checkout can change provenance.
-
-## Remaining implementation and acceptance checks
-
-| Step | Work | Required evidence |
-| --- | --- | --- |
-| 1. Assets and robot configuration | Save head-fixed URDF/XML derivatives and required meshes/license; apply derived names, limits, gains, HOME and simulation baseline | IsaacGym loaded names/limits match configuration; head mass is retained; collision geometry is consistent across simulators |
-| 2. Flat-ground baseline | Add an X2 experiment with fixed HOME arm references (`motion=None`), zero torso/height offsets initially, no hand forces and no depth input | Stable reset/settling, finite observations/actions, functioning PD/torque clipping and a short training smoke test |
-| 3. Export and early sim2sim | Add X2 inference/layout/joint mappings and simulate an exported flat-ground policy in MuJoCo; keep interactive G1 arm IK disabled | PyTorch/export agreement on identical inputs; controlled standing and forward/backward/yaw behavior; repeatable reset/stop behavior |
-| 4. Terrain experts | Add X2 terrain presets and introduce torso/base-height curricula and randomization progressively | Command tracking, fall rate, joint limits, torque saturation and reachability evaluated on X2 |
-| 5. Depth distillation | Use the selected dual-camera rig with X2 self-occlusion and newly trained X2 teachers | Camera geometry/depth processing agree across simulators; exported student evaluated on held-out terrain |
-
-Use the proposed numerical baseline to begin implementation; no additional robot parameters are needed from the user at this stage. Validate the assumptions as each step runs. Reuse G1's algorithms, observation organization, terrain generation and curriculum mechanisms, with X2-specific geometry and mappings.
-
-G1 checkpoints and joint-space motion clips are incompatible with direct X2 use. Retargeting motion clips, interactive hand IK and hand-force tasks are optional later extensions, not requirements for the fixed-arm baseline or its terrain teachers. Depth distillation needs X2 checkpoints for all four routing keys: `slopes`, `stairs_up`, `stairs_down` and `stepping_stones_columns`; a shared stairs policy must be supplied explicitly for both stairs keys.
-
-Primary integration files are `rpl_training/config_values/{robot,experiment,registry,camera}.py`, the training launchers, and `rpl_sim2sim/{inference_presets,policy,bridge,simulator}.py` with new assets/configs. Existing G1 launch commands remain G1-only until that work is implemented.
+Only regeneration needs the original vendor files and gain/pose reference. The packaged assets support normal training and sim2sim independently of those local source paths.

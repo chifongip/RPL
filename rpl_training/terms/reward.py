@@ -76,9 +76,15 @@ def _waist_yaw_dof_index(env: LeggedRobotLocomotionManager) -> int | None:
     return env.robot_config.dof_names.index(name)
 
 
-def _ee_hand_indices(env: LeggedRobotLocomotionManager) -> tuple[int, int]:
+def _ee_hand_indices(
+    env: LeggedRobotLocomotionManager, hand_link_names: tuple[str, str] | None = None
+) -> tuple[int, int]:
     sim = env.simulator
     names = env.body_names
+    if hand_link_names is not None:
+        if len(hand_link_names) != 2 or any(name not in names for name in hand_link_names):
+            raise ValueError(f"Expected two end-effector bodies present in the robot: {hand_link_names}")
+        return tuple(int(sim.find_rigid_body_indice(name)) for name in hand_link_names)
     li = None
     for link in ("left_hand_link", "left_wrist_yaw_link", "left_wrist_pitch_link"):
         if link in names:
@@ -906,8 +912,10 @@ def limits_upper_body_torque(env: LeggedRobotLocomotionManager, torque_softness:
     return torch.sum((t - lim).clip(min=0.0), dim=1)
 
 
-def penalty_ee_lin_acc(env: LeggedRobotLocomotionManager) -> torch.Tensor:
-    li, ri = _ee_hand_indices(env)
+def penalty_ee_lin_acc(
+    env: LeggedRobotLocomotionManager, hand_link_names: tuple[str, str] | None = None
+) -> torch.Tensor:
+    li, ri = _ee_hand_indices(env, hand_link_names)
     v_l = env.simulator._rigid_body_vel[:, li, :3]
     v_r = env.simulator._rigid_body_vel[:, ri, :3]
     pl = getattr(env, "_loco_manip_prev_left_ee_lin_vel", None)
@@ -924,8 +932,10 @@ def penalty_ee_lin_acc(env: LeggedRobotLocomotionManager) -> torch.Tensor:
     return torch.norm(d_l, dim=1) + torch.norm(d_r, dim=1)
 
 
-def penalty_ee_ang_acc(env: LeggedRobotLocomotionManager) -> torch.Tensor:
-    li, ri = _ee_hand_indices(env)
+def penalty_ee_ang_acc(
+    env: LeggedRobotLocomotionManager, hand_link_names: tuple[str, str] | None = None
+) -> torch.Tensor:
+    li, ri = _ee_hand_indices(env, hand_link_names)
     w_l = env.simulator._rigid_body_ang_vel[:, li, :3]
     w_r = env.simulator._rigid_body_ang_vel[:, ri, :3]
     pl = getattr(env, "_loco_manip_prev_left_ee_ang_vel", None)

@@ -41,6 +41,8 @@ def load_config(path: Path = DEFAULT_CONFIG) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    ap.add_argument("--headless", action="store_true", help="run without a viewer (use --steps for a bounded test)")
+    ap.add_argument("--steps", type=int, default=0, help="stop after this many physics steps; 0 runs continuously")
     ap.add_argument("--no-joystick", action="store_true", help="no Xbox pad (USE_JOYSTICK: false)")
     ap.add_argument("--domain-id", type=int, default=None, help="DDS domain (default: the config's, 0)")
     ap.add_argument("--shm-name", default="depth_img_shm", help="depth shared-memory block")
@@ -50,6 +52,10 @@ def main() -> None:
     args = ap.parse_args()
 
     config = load_config(args.config)
+    if args.headless:
+        config["HEADLESS"] = True
+        config["USE_RENDERER"] = False
+    config["MAX_STEPS"] = args.steps
     if args.no_joystick:
         config["USE_JOYSTICK"] = False
     if args.domain_id is not None:
@@ -67,11 +73,37 @@ def main() -> None:
         mujoco.mj_forward(simulator.mj_model, simulator.mj_data)
         simulator.elastic_band.point = np.array([args.spawn[0], args.spawn[1], simulator.elastic_band.point[2]])
 
-    simulator.sim_thread.start()
+    run_simulation(simulator, require_camera=bool(args.steps))
+
+
+def run_simulation(simulator, *, require_camera=False):
+    """Run physics/cameras together and propagate worker failures to the caller."""
+    workers = [simulator.sim_thread, simulator.cam_thread]
     if simulator.record_thread:
-        simulator.record_thread.start()
-    simulator.cam_thread.start()
-    simulator.sim_thread.join()
+        workers.append(simulator.record_thread)
+    started = []
+    try:
+        for worker in workers:
+            worker.start()
+            started.append(worker)
+        simulator.sim_thread.join()
+    finally:
+        simulator.server.stop_event.set()
+        if hasattr(simulator.viewer, "close"):
+            simulator.viewer.close()
+        for worker in started:
+            worker.join(timeout=10)
+        renderer = getattr(simulator, "_gl_prime_renderer", None)
+        if renderer is not None:
+            renderer.close()
+    if any(worker.is_alive() for worker in started):
+        raise RuntimeError("Simulator worker did not stop")
+    if hasattr(simulator, "simulation_error"):
+        raise simulator.simulation_error
+    if simulator.server.error is not None:
+        raise RuntimeError("Camera producer failed") from simulator.server.error
+    if require_camera and simulator.server.frame_count == 0:
+        raise RuntimeError("No camera frames produced during the bounded simulation")
 
 
 if __name__ == "__main__":

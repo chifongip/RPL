@@ -3917,7 +3917,7 @@
     "clip_torques": true,
     "action_scales_by_effort_limit_over_p_gain": false,
     "torque_equation": "clip(Kp * (q_home + 0.25 * clip(a, -100, 100) - q) - Kd * dq, -effort, effort)",
-    "target_position_clipping": "G1 action term does not clamp targets to position limits; raw per-joint legal action intervals are provided above.",
+    "target_position_clipping": "Unmodified G1 joint-position action term; no position-target clamp. Generated simulation models use symmetric waist-yaw hard stops.",
     "armature_kg_m2": [
       0.03,
       0.03,
@@ -4018,7 +4018,18 @@
     ],
     "initial_upper_body_reference": "HOME_KEYFRAME arms, motion=None",
     "initial_hand_forces": false,
-    "symmetry_enabled_initially": false,
+    "symmetry_enabled_initially": true,
+    "symmetry_scope": "PPO flat and terrain experts; DAgger unchanged",
+    "symmetry_actor_coef": 1.0,
+    "symmetry_critic_coef": 0.0,
+    "joint_position_limit_overrides_rad": {
+      "waist_yaw_joint": [
+        -2.2078,
+        2.2078
+      ]
+    },
+    "joint_limit_override_note": "Apply only to generated training URDF/MuJoCo and runtime configuration; source vendor limits are preserved in derived.dofs.",
+    "symmetry_implementation": "Unmodified G1 PPO and SymmetryUtils; no sample masking or custom distributed loss handling.",
     "four_point_foot_edge_offsets_m": {
       "front": [
         0.11,

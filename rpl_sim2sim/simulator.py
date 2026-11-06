@@ -54,7 +54,10 @@ class FalconLocoManipCamSimulator:
         fails if it is first created after the main-thread GLX context). Kept alive for the process."""
         if os.environ.get("MUJOCO_GL", "").lower() != "egl":
             return
-        if not (self.config.get("USE_RENDERER", False) or self.config.get("USE_CAMERA", False)):
+        if self.config.get("HEADLESS", False):
+            return
+        has_cameras = bool(self.robot_config.get("cameras", {}).get("poses"))
+        if not (self.config.get("USE_RENDERER", False) or has_cameras):
             return
         try:
             self._gl_prime_renderer = mujoco.Renderer(self.mj_model, height=64, width=64)
@@ -68,9 +71,22 @@ class FalconLocoManipCamSimulator:
         print(self.config["ROBOT_SCENE"])
         self.mj_model = mujoco.MjModel.from_xml_path(self.config["ROBOT_SCENE"])
         self.mj_data = mujoco.MjData(self.mj_model)
+        if self.config.get("INITIAL_KEYFRAME"):
+            mujoco.mj_resetDataKeyframe(
+                self.mj_model, self.mj_data, self.mj_model.key(self.config["INITIAL_KEYFRAME"]).id
+            )
+            mujoco.mj_forward(self.mj_model, self.mj_data)
         self.mj_model.opt.timestep = self.sim_dt
         self._prime_offscreen_gl()
         self.elastic_band = ElasticBand()
+        if self.config.get("HOLD_HOME", False):
+            # Support the untrained robot while the policy initializes.
+            self.elastic_band.point = self.mj_data.qpos[:3].copy() + [0, 0, 2.1]
+            self.elastic_band.length = 0.0
+        if self.config.get("HEADLESS", False):
+            self.band_attached_link = self.mj_model.body(self.config.get("BAND_ATTACHED_LINK", "torso_link")).id
+            self.viewer = _HeadlessViewer()
+            return
         if self.config["ENABLE_ELASTIC_BAND"]:
             self.band_attached_link = self.mj_model.body(self.config.get("BAND_ATTACHED_LINK", "torso_link")).id
             self.viewer = mujoco.viewer.launch_passive(
@@ -84,12 +100,17 @@ class FalconLocoManipCamSimulator:
 
     def init_factory(self):
         if self.config.get("INTERFACE", None):
-            ChannelFactoryInitialize(self.config["DOMAIN_ID"], "lo")
+            ChannelFactoryInitialize(self.config["DOMAIN_ID"], self.config["INTERFACE"])
         else:
             ChannelFactoryInitialize(self.config["DOMAIN_ID"])
 
     def init_robot_bridge(self):
         self.robot_bridge = UnitreeSdk2Bridge(self.mj_model, self.mj_data, self.robot_config)
+        if self.config.get("HOLD_HOME", False):
+            for i, motor in enumerate(self.robot_bridge.low_cmd.motor_cmd[: self.num_motor]):
+                motor.q = self.robot_config["default_joint_angles"][i]
+                motor.kp = self.robot_config["motor_kp"][i]
+                motor.kd = self.robot_config["motor_kd"][i]
         if self.config["USE_JOYSTICK"]:
             self.robot_bridge.SetupJoystick(
                 device_id=self.config["JOYSTICK_DEVICE"], js_type=self.config["JOYSTICK_TYPE"]
@@ -102,8 +123,8 @@ class FalconLocoManipCamSimulator:
                 for i in range(self.robot_bridge.num_motor):
                     self.torques[i] = (
                         motor_cmd[i].tau
-                        + motor_cmd[i].kp * (motor_cmd[i].q - self.mj_data.qpos[7 + i])
-                        + motor_cmd[i].kd * (motor_cmd[i].dq - self.mj_data.qvel[6 + i])
+                        + motor_cmd[i].kp * (motor_cmd[i].q - self.mj_data.qpos[self.robot_bridge.joints.qpos[i]])
+                        + motor_cmd[i].kd * (motor_cmd[i].dq - self.mj_data.qvel[self.robot_bridge.joints.qvel[i]])
                     )
             except Exception as e:
                 self.logger.error(f"Joint {i} not found in motor_cmd: {e}")
@@ -114,30 +135,41 @@ class FalconLocoManipCamSimulator:
         self.robot_bridge.PublishLowState()
         if self.robot_bridge.joystick:
             self.robot_bridge.PublishWirelessController()
-        if self.config["ENABLE_ELASTIC_BAND"] and self.elastic_band.enable:
-            self.mj_data.xfrc_applied[self.band_attached_link, :3] = self.elastic_band.Advance(
-                self.mj_data.qpos[:3], self.mj_data.qvel[:3]
-            )
+        if self.config["ENABLE_ELASTIC_BAND"]:
+            self.mj_data.xfrc_applied[self.band_attached_link, :3] = 0
+            if self.elastic_band.enable:
+                self.mj_data.xfrc_applied[self.band_attached_link, :3] = self.elastic_band.Advance(
+                    self.mj_data.qpos[:3], self.mj_data.qvel[:3]
+                )
         self.compute_torques()
-        if self.robot_bridge.free_base:
-            self.mj_data.ctrl = np.concatenate((np.zeros(6), self.torques))
-        else:
-            self.mj_data.ctrl = self.torques
+        self.mj_data.ctrl[:] = 0
+        self.mj_data.ctrl[self.robot_bridge.joints.actuators] = self.torques
         mujoco.mj_step(self.mj_model, self.mj_data)
 
     def simulation_thread(self):
+        try:
+            self._simulation_loop()
+        except BaseException as error:
+            self.simulation_error = error
+
+    def _simulation_loop(self):
         sim_cnt = 0
         start_time = time.time()
-        while self.viewer.is_running():
+        while self.viewer.is_running() and not self.server.stop_event.is_set():
             self.sim_step()
             if sim_cnt % (self.viewer_dt / self.sim_dt) == 0:
                 self.viewer.sync()
             sim_cnt += 1
+            if self.config.get("MAX_STEPS") and sim_cnt >= self.config["MAX_STEPS"]:
+                break
             if sim_cnt % 1000 == 0:
                 end_time = time.time()
                 self.logger.info(f"FPS: {1000 / (end_time - start_time):.2f}")
                 start_time = end_time
             self.rate.sleep()
+        if not np.isfinite(self.mj_data.qpos).all() or not np.isfinite(self.mj_data.qvel).all():
+            raise RuntimeError("Non-finite MuJoCo state")
+        self.logger.info(f"Simulation finished: {sim_cnt} steps, pelvis z={self.mj_data.qpos[2]:.4f}")
 
     def record_video(self, filename="simulation.mp4"):
         """Follow camera on the torso at VIEWER_DT; frames are written while the band's ``R`` toggle is on."""
@@ -176,6 +208,8 @@ class FalconLocoManipCamSimulator:
             "near_clip": props["near_clip"],
             "far_clip": props["far_clip"],
             "depth_delay": props.get("depth_delay", 0),
+            "clip_before_resize": props.get("clip_before_resize", False),
+            "native_renderer": props.get("native_renderer", False),
             "id_numbers": {},
         }
         for camera_name in camera_config["poses"]:
@@ -185,3 +219,11 @@ class FalconLocoManipCamSimulator:
         self.server = ImageServer(image_config, img_shm_name=self.config.get("IMG_SHM_NAME", "depth_img_shm"))
         self.cam_thread = Thread(target=self.server.send_process)
         self.cam_thread.daemon = True
+
+
+class _HeadlessViewer:
+    def is_running(self):
+        return True
+
+    def sync(self):
+        pass
