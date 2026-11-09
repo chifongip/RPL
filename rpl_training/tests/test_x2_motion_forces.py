@@ -45,11 +45,15 @@ def test_x2_task_matches_corresponding_g1(stage):
         "left_extend_parent_link",
         "right_extend_parent_link",
         "extend_offset",
+        "apply_force_pos_ratio_range",
     }
     assert {k: v for k, v in forces.items() if k not in geometry_keys} == {
         k: v for k, v in original.items() if k not in geometry_keys
     }
     assert forces["enabled"] == (stage != "flat")
+    assert forces["extend_offset"] == (0.0, 0.0, -0.15)
+    assert forces["apply_force_pos_ratio_range"] == (0.2, 1.0)
+    assert original["apply_force_pos_ratio_range"] == (0.0, 1.0)
 
 
 def test_real_x2_motion_reference_playback_freeze_reset_and_end():
@@ -129,6 +133,13 @@ def test_x2_nonzero_forces_reach_correct_bodies_and_observations(monkeypatch):
     assert mgr.left_arm_dof_indices.tolist() == list(range(15, 22))
     assert mgr.right_arm_dof_indices.tolist() == list(range(22, 29))
     mgr._init_force_settings()
+    # Exercise endpoints and an interior point, including rotation of local -Z
+    # into world -X on the second environment (+90 degrees about Y).
+    assert torch.all((mgr.left_apply_force_pos_ratio >= 0.2) & (mgr.left_apply_force_pos_ratio <= 1.0))
+    assert torch.all((mgr.right_apply_force_pos_ratio >= 0.2) & (mgr.right_apply_force_pos_ratio <= 1.0))
+    mgr.left_apply_force_pos_ratio[:] = torch.tensor([[0.2], [1.0]])
+    mgr.right_apply_force_pos_ratio[:] = torch.tensor([[0.6], [1.0]])
+    rotations[1, :, :] = torch.tensor([0.0, 2**-0.5, 0.0, 2**-0.5])
     mgr.apply_force_scale[:] = 1.0
     mgr.left_zero_force.zero_()
     mgr.right_zero_force.zero_()
@@ -143,7 +154,11 @@ def test_x2_nonzero_forces_reach_correct_bodies_and_observations(monkeypatch):
     assert torch.isfinite(force).all() and torch.isfinite(pos).all()
     hands = [cfg.robot.body_names.index(f"{side}_wrist_roll_link") for side in ("left", "right")]
     assert torch.all(force[:, hands, 2] < 0)
-    torch.testing.assert_close(pos[:, hands], positions[:, hands])
+    expected = positions[:, hands].clone()
+    expected[0, 0, 2] -= 0.03
+    expected[0, 1, 2] -= 0.09
+    expected[1, :, 0] -= 0.15
+    torch.testing.assert_close(pos[:, hands], expected)
     torch.testing.assert_close(mgr.left_ee_apply_force, force[:, hands[0]])
     torch.testing.assert_close(mgr.right_ee_apply_force, force[:, hands[1]])
     other = [i for i in range(mgr.num_bodies) if i not in hands]

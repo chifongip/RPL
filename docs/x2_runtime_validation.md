@@ -30,6 +30,25 @@ offset and geometric initialization remain 0.68 m. Motion playback uses G1's
 The earlier results below record the original fixed-reference integration.
 These new smoke results establish integration, not tracking quality or balance.
 
+## Hand sampling segment update (2026-11-09)
+
+X2 now samples between wrist-roll-local `(0, 0, -0.03)` and `(0, 0, -0.15)` m,
+inside the simplified hand collision box. X2 uses the existing extension offset
+and ratio range `(0.2, 1.0)`; the shared force manager is unchanged from G1.
+All 41 targeted X2 runtime/motion/force and G1 command-parity tests pass,
+including segment endpoints, interior samples and rotation into world
+coordinates. The updated comparison is in the [training guide](x2_ultra_training_review.md).
+
+The last full GPU smoke used the earlier equivalent geometry implementation.
+The run under `logs/x2-runtime-smoke/20261109_080956/` passed 120 training
+tests (2 skipped), 26 simulator/model tests and 28 policy tests. All three
+three-iteration training stages and export checks passed; maximum ONNX error
+was 4.48e-8. The first depth transport process wrote its successful 50-tick
+report, then exited with SIGSEGV during shutdown. A separate flat/depth transport
+rerun with the same exports passed with clean process exits; reports are under
+`transport-rerun/`. The original shutdown failure was not reproduced or resolved
+by this geometry change.
+
 ## Learning algorithm boundary
 
 X2 uses the corresponding G1 PPO trainer, symmetry utility, action term and environment classes directly. There is no X2 PPO implementation, custom sample mask, loss normalization or distributed-loss validity guard. The Holosoma submodule has no working-tree changes. X2's DAgger adapter only selects and validates teacher checkpoints; it does not change the distillation update.

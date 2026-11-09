@@ -77,7 +77,7 @@ x2_dual_depth = replace(
 def _x2(base, name, *, flat=False, distill=False):
     command = deepcopy(base.command)
     command.setup_terms["locomotion_command"].params["default_base_height"] = 0.64
-    # Retain G1's stage-specific force task at X2's final wrist origins.
+    # Retain G1's force task; X2's hand component extends along local -Z.
     command.params["ee_force_config"] = {
         **command.params.get("ee_force_config", {}),
         "enabled": not flat,
@@ -85,7 +85,8 @@ def _x2(base, name, *, flat=False, distill=False):
         "right_hand_link": "right_wrist_roll_link",
         "left_extend_parent_link": "left_wrist_roll_link",
         "right_extend_parent_link": "right_wrist_roll_link",
-        "extend_offset": (0.0, 0.0, 0.0),
+        "extend_offset": (0.0, 0.0, -0.15),
+        "apply_force_pos_ratio_range": (0.2, 1.0),
     }
     sim = replace(
         base.simulator,

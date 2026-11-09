@@ -19,10 +19,24 @@ The [parameter reference](x2_ultra_parameters.md) and [JSON](x2_ultra_parameters
 | Torso/base-height commands | Same task interpretation and curriculum; nominal commanded height changed to 0.64 m; height-scan offset remains 0.68 m |
 | Robot dynamics and geometry | X2 vendor parameters with a symmetric simulation waist-yaw range, simplified collisions, per-joint armature 0.03, joint friction 0.3, selected gains/HOME and derived foot samples |
 | Upper-body references | Retargeted X2 ACCAD arms, normalized to 10 s with the inherited G1 loader |
-| Hand forces | Enabled for terrain experts and depth student with inherited G1 force settings; applied at X2 wrist-roll origins with zero extension offset; flat baseline remains without forces |
+| Hand forces | Enabled for terrain experts and depth student with inherited G1 force settings; sampled between local `(0, 0, -0.03)` and `(0, 0, -0.15)` m in each wrist-roll frame; flat baseline remains without forces |
 | Interactive hand IK | Disabled |
 | Symmetry augmentation | Enabled for flat/expert PPO with G1 coefficients (actor 1, critic 0); depth DAgger unchanged |
 | Episode horizon | Explicit 10 s, matching G1's standardized motion duration; motion-end termination is active |
+
+![G1 and X2 force sampling in local wrist frames](assets/g1_x2_force_geometry.png)
+
+X2 samples along the 120 mm segment from local `(0, 0, -0.03)` to
+`(0, 0, -0.15)` m on both sides, using the unmodified G1 force manager with
+`extend_offset=(0, 0, -0.15)` and `apply_force_pos_ratio_range=(0.2, 1.0)`.
+The segment follows the wrist-roll frame. The hand meshes extend to approximately
+`z=-0.182` m, and the simplified hand collision boxes span `[-0.170, -0.030]` m
+along local Z. The selected endpoint is 20 mm inside the distal collision
+boundary. As in G1, each hand's interpolation ratio is sampled once per
+environment initialization and the application point follows the wrist pose.
+The offset is a geometry-based simulation choice, not a measured grasp point.
+Regenerate the comparison with `python scripts/plot_force_application_geometry.py`
+in the training environment.
 
 All X2 presets load the packaged X2 ACCAD library and retain the corresponding G1 reference sampling, freeze/reset behavior and motion-scale curricula. Flat torso and base-height command ranges also follow G1. The shared loader is unchanged: duration normalization changes pose playback timing but does not rescale stored velocities. This preserves G1 behavior, including its playback/reset-velocity mismatch. The fixed-reference terrain-curriculum fallback remains available when motions are explicitly disabled.
 
