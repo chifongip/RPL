@@ -259,6 +259,14 @@ reference student's global rollout size.
 See the [X2 runtime guide](docs/x2_ultra_training_review.md) for teacher setup,
 sim2sim and single-GPU smoke tests, plus the [parameter reference](docs/x2_ultra_parameters.md).
 
+### G1-to-X2 motion retargeting
+
+The 252 ACCAD clips (48,233 frames) are retargeted to X2's 29-DOF,
+fixed-head model, preserving the G1 source timing at 30 fps.
+[Watch the G1/X2 arm-reference comparison](assets/x2_accad_retarget_demo.mp4)
+(100 seconds; ten-second presentation per clip). See
+[retargeting, validation and reproduction](docs/x2_motion_retargeting.md).
+
 ## Citation
 
 ```bibtex
