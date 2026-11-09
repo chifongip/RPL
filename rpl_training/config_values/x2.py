@@ -103,11 +103,22 @@ def _x2(base, name, *, flat=False, distill=False):
         )
     # X2's last wrist joint is roll; G1's wrist-yaw fallback is proximal on X2.
     hand_links = ("left_wrist_roll_link", "right_wrist_roll_link")
+    reward_params = {
+        "penalty_ee_lin_acc": {"hand_link_names": hand_links},
+        "penalty_ee_ang_acc": {"hand_link_names": hand_links},
+        # The ankle-roll frame is 73 mm above the contact sole. Sampling at
+        # local Z=0 incorrectly fails the inherited 50 mm foothold tolerance.
+        "penalty_foothold": {
+            "foothold_sample_z_offsets": tuple(
+                MODEL["feet"][f"{side}_ankle_roll_link"]["sole_z"] for side in ("left", "right")
+            ),
+        },
+    }
     reward = replace(
         base.reward,
         terms={
-            name: replace(term, params={**term.params, "hand_link_names": hand_links})
-            if name in ("penalty_ee_lin_acc", "penalty_ee_ang_acc")
+            name: replace(term, params={**term.params, **reward_params[name]})
+            if name in reward_params
             else term
             for name, term in base.reward.terms.items()
         },

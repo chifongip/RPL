@@ -674,7 +674,9 @@ def penalty_foothold(
     raw heightfield cell under each sample like FAR-FALCON's ``_get_terrain_heights``
     (truncated cell index, no interpolation); requires ``height_scan_mode="falcon"``.
     The term must stay named ``penalty_foothold``: the env builds the sole sample
-    grid from that term's params (``foothold_num_samples_long`` / ``_wide``)."""
+    grid from that term's params (``foothold_num_samples_long`` / ``_wide``).
+    The RPL env also accepts ``foothold_sample_z_offsets`` (left/right local
+    sole Z in metres); both backends consume the resulting corrected grid."""
     if not falcon_heightfield:
         penalty = _loco_reward_terms.penalty_foothold(env, foothold_epsilon=foothold_epsilon)
     else:

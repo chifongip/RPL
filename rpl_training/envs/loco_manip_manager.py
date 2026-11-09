@@ -47,6 +47,23 @@ class LeggedRobotLocoManipManager(LeggedRobotLocomotionManager):
             f"{self.max_episode_length_s}s ({int(self.max_episode_length)} steps)"
         )
 
+    def _init_foothold_sampling(self) -> None:
+        """Place footprint samples on configured sole planes in the foot frames.
+
+        ``foothold_sample_z_offsets`` contains left/right local Z coordinates
+        in metres. Leaving it unset preserves the inherited FALCON sampling.
+        Both foothold reward backends transform this grid with the foot pose,
+        so the sole offset also follows foot pitch and roll on slopes.
+        """
+        super()._init_foothold_sampling()
+        offsets = self._foothold_params_from_reward_cfg().get("foothold_sample_z_offsets")
+        if offsets is None:
+            return
+        offsets = torch.as_tensor(offsets, device=self.device, dtype=self.foot_samples_local.dtype)
+        if offsets.shape != (2,) or not torch.isfinite(offsets).all():
+            raise ValueError("foothold_sample_z_offsets must contain two finite left/right sole coordinates in metres")
+        self.foot_samples_local[:, :, 2] = offsets[:, None]
+
     def reset_envs_idx(self, env_ids, target_states=None, target_buf=None):
         """Like :meth:`~holosoma.envs.base_task.BaseTask.reset_envs_idx` but runs curriculum before robot respawn.
 

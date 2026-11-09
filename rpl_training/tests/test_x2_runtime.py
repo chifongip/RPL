@@ -101,6 +101,9 @@ def test_g1_algorithm_and_batch_settings_retained(suffix):
         if name in ("penalty_ee_lin_acc", "penalty_ee_ang_acc"):
             assert term.params["hand_link_names"] == ("left_wrist_roll_link", "right_wrist_roll_link")
             assert replace(term, params=old.reward.terms[name].params) == old.reward.terms[name]
+        elif name == "penalty_foothold":
+            assert term.params["foothold_sample_z_offsets"] == pytest.approx((-0.073, -0.073))
+            assert replace(term, params=old.reward.terms[name].params) == old.reward.terms[name]
         else:
             assert term == old.reward.terms[name]
     assert new.terrain == old.terrain

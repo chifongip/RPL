@@ -25,6 +25,17 @@ The [parameter reference](x2_ultra_parameters.md) and [JSON](x2_ultra_parameters
 
 The fixed-reference terrain curriculum uses the episode horizon when no motion library is active; otherwise its move-down criterion would see a zero-duration clip. G1 motion-enabled behavior is preserved.
 
+X2 foothold samples use the left/right `sole_z` coordinates from the packaged
+derived geometry (`-0.073 m` in each ankle-roll frame), configured through
+`penalty_foothold.params.foothold_sample_z_offsets`. The environment applies these
+coordinates to the local footprint grid before either foothold reward backend
+transforms it with the full foot pose. This keeps level and slope-aligned support
+points on the sole instead of 73 mm above it. The inherited 50 mm unsupported-point
+tolerance is preserved; sampling at the ankle origin would incorrectly penalize
+grounded X2 feet. G1 presets retain their existing sample grid. This correction
+affects newly initialized X2 environments; existing checkpoint weights do not
+change, and resolving the later policy divergence still requires a training run.
+
 Despite the name `waist_pitch`, RPL tracks desired torso tilt through projected gravity. Hip/leg and pelvis motion can compensate for limited waist travel. Torso pitch commands retain the G1 range and are not clamped to waist-pitch joint limits. Yaw separately tracks the waist-yaw joint.
 
 ## Joint order
