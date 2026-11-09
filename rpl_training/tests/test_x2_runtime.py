@@ -147,6 +147,7 @@ def test_x2_launcher_default_gpu_allocation(tmp_path, task, gpus):
 
 def test_x2_runtime_constants_cover_all_joints():
     robot = x2.x2_29dof
+    assert robot.dof_joint_friction_list == [0.0] * len(DOF_NAMES)
     assert robot.dof_names == DOF_NAMES
     assert list(robot.init_state.default_joint_angles.values()) == HOME
     assert set(robot.control.stiffness) == set(DOF_NAMES)

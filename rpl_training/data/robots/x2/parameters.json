@@ -3980,8 +3980,9 @@
       0.3,
       0.3
     ],
+    "physx_joint_friction": 0.0,
     "passive_joint_damping": 0.0,
-    "friction_mapping_note": "MuJoCo Coulomb frictionloss and PhysX joint friction are not guaranteed equivalent; match the nominal coefficient and validate.",
+    "friction_mapping_note": "PhysX joint friction is zero to match the loaded G1 IsaacGym asset; MuJoCo Coulomb frictionloss remains independently set to 0.3 Nm.",
     "physics_dt_s": 0.005,
     "policy_dt_s": 0.02,
     "pd_updates_per_policy_step": 4,

@@ -17,7 +17,7 @@ The [parameter reference](x2_ultra_parameters.md) and [JSON](x2_ultra_parameters
 | Environment allocation | G1 global totals retained: stones/stairs/generic expert 16,384; slopes 4,096; depth student 8,192 |
 | Physics / policy frequency | Preserved at 200 Hz / 50 Hz; PD torques recomputed each physics step |
 | Torso/base-height commands | Same task interpretation and curriculum; nominal commanded height changed to 0.64 m; height-scan offset remains 0.68 m |
-| Robot dynamics and geometry | X2 vendor parameters with a symmetric simulation waist-yaw range, simplified collisions, per-joint armature 0.03, joint friction 0.3, selected gains/HOME and derived foot samples |
+| Robot dynamics and geometry | X2 vendor parameters with a symmetric simulation waist-yaw range, simplified collisions, per-joint armature 0.03, PhysX joint friction 0 to match G1 (MuJoCo frictionloss remains 0.3 Nm), selected gains/HOME and derived foot samples |
 | Upper-body references | Retargeted X2 ACCAD arms, normalized to 10 s with the inherited G1 loader |
 | Hand forces | Enabled for terrain experts and depth student with inherited G1 force settings; sampled between local `(0, 0, -0.03)` and `(0, 0, -0.15)` m in each wrist-roll frame; flat baseline remains without forces |
 | Interactive hand IK | Disabled |

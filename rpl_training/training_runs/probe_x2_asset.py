@@ -39,7 +39,7 @@ def main():
                 else [joint[field] for joint in MODEL["dofs"]]
             )
             np.testing.assert_allclose(properties[field], expected, rtol=1e-6, atol=1e-6)
-        np.testing.assert_allclose(properties["friction"], 0.3, atol=1e-6)
+        np.testing.assert_allclose(properties["friction"], 0.0, atol=1e-6)
         np.testing.assert_allclose(properties["damping"], 0.0, atol=1e-6)
         print(
             json.dumps(

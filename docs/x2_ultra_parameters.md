@@ -65,7 +65,8 @@ These inherited settings and preparation choices define the nominal simulation b
 | Action clipping | ±100 | Existing G1 setting; this does **not** guarantee joint-position feasibility |
 | Torque clipping | Per-joint vendor effort limits above | Applied after explicit PD |
 | Armature | 0.03 kg·m² on each joint | Vendor XML default |
-| Joint friction loss / passive damping | 0.3 Nm / 0 | Vendor XML; PhysX friction behavior still requires comparison |
+| PhysX joint friction | 0 | Match the loaded G1 IsaacGym asset; independent of MuJoCo frictionloss |
+| MuJoCo joint friction loss / passive damping | 0.3 Nm / 0 | Vendor XML |
 | Physics / policy / PD | 200 Hz / 50 Hz / 200 Hz | G1 training baseline, four torque updates per action |
 | Baseline command delay | 0 | Deterministic first comparison; G1 upper-body 0–1 policy-step randomization can follow |
 | Ground friction / restitution | 1.0 / 0 | RPL terrain baseline |

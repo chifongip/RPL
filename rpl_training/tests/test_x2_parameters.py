@@ -15,6 +15,18 @@ _spec.loader.exec_module(_module)
 DEFAULT_ASSETS, derive = _module.DEFAULT_ASSETS, _module.derive
 
 
+def test_runtime_assets_separate_physx_friction_from_mujoco_frictionloss():
+    asset_dir = ROOT / 'rpl_training/data/robots/x2'
+    urdf = ET.parse(asset_dir / 'x2_ultra_29dof.urdf').getroot()
+    joints = [j for j in urdf.findall('joint') if j.get('type') != 'fixed']
+    assert len(joints) == 29
+    assert all(float(j.find('dynamics').get('friction')) == 0.0 for j in joints)
+    xml = ET.parse(asset_dir / 'x2_ultra_29dof.xml').getroot()
+    mj_joints = [j for j in xml.findall('worldbody/.//joint') if j.get('type') != 'free']
+    assert len(mj_joints) == 29
+    assert all(float(j.get('frictionloss')) == 0.3 for j in mj_joints)
+
+
 @pytest.fixture(scope='module')
 def parameters():
     if not DEFAULT_ASSETS.is_dir() or not _module.DEFAULT_CONSTANTS.is_file():

@@ -46,7 +46,7 @@ def build(source, destination):
             if dynamics is None:
                 dynamics = ET.SubElement(joint, "dynamics")
             dynamics.set("damping", "0")
-            dynamics.set("friction", "0.3")
+            dynamics.set("friction", str(parameters["selected_or_inherited_baseline"]["physx_joint_friction"]))
     for mesh in urdf.findall(".//mesh"):
         filename = Path(mesh.get("filename")).name
         shutil.copy2(source / "meshes" / filename, mesh_dir / filename)
