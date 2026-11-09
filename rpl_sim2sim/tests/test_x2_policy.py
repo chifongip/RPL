@@ -26,8 +26,8 @@ def _flat_policy_and_state():
     policy.lin_vel_command = np.zeros((1, 2))
     policy.ang_vel_command = np.zeros((1, 1))
     policy.stand_command = np.zeros((1, 1))
-    policy.base_height_command = np.array([[0.68]])
-    policy.desired_base_height = 0.68
+    policy.base_height_command = np.array([[0.64]])
+    policy.desired_base_height = 0.64
     policy.waist_dofs_command = np.zeros((1, 3))
     policy.ref_upper_dof_pos = np.array([policy.config.robot.default_dof_angles[15:]])
     policy.depth_sensor = None
@@ -77,3 +77,10 @@ def test_joint_observations_keep_x2_order_and_commands_keep_semantic_order():
         offset += width
     assert offset == 115
     np.testing.assert_array_equal(inputs["actor_obs_lower_body"], inputs["actor_obs_upper_body"])
+
+
+def test_x2_inference_nominal_height_matches_training():
+    from rpl_sim2sim.inference_presets import x2_29dof_rpl_depth, x2_29dof_rpl_flat
+
+    assert x2_29dof_rpl_depth.task.desired_base_height == 0.64
+    assert x2_29dof_rpl_flat.task.desired_base_height == 0.64

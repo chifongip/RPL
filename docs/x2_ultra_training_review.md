@@ -16,14 +16,15 @@ The [parameter reference](x2_ultra_parameters.md) and [JSON](x2_ultra_parameters
 | Terrain-expert reward weights, terrain distributions and domain randomization | Inherited from corresponding G1 presets; end-effector acceleration rewards select X2 wrist-roll end links |
 | Environment allocation | G1 global totals retained: stones/stairs/generic expert 16,384; slopes 4,096; depth student 8,192 |
 | Physics / policy frequency | Preserved at 200 Hz / 50 Hz; PD torques recomputed each physics step |
-| Torso/base-height commands | Same task interpretation and curriculum; nominal height changed to 0.68 m |
+| Torso/base-height commands | Same task interpretation and curriculum; nominal commanded height changed to 0.64 m; height-scan offset remains 0.68 m |
 | Robot dynamics and geometry | X2 vendor parameters with a symmetric simulation waist-yaw range, simplified collisions, per-joint armature 0.03, joint friction 0.3, selected gains/HOME and derived foot samples |
-| Upper-body references | Fixed HOME arms (`motion=None`); G1 joint-space clips are not reused |
-| Hand forces and interactive hand IK | Disabled for this baseline |
+| Upper-body references | Retargeted X2 ACCAD arms, normalized to 10 s with the inherited G1 loader |
+| Hand forces | Enabled for terrain experts and depth student with inherited G1 force settings; applied at X2 wrist-roll origins with zero extension offset; flat baseline remains without forces |
+| Interactive hand IK | Disabled |
 | Symmetry augmentation | Enabled for flat/expert PPO with G1 coefficients (actor 1, critic 0); depth DAgger unchanged |
-| Episode horizon | Explicit 10 s, matching G1's standardized motion duration without requiring a motion library |
+| Episode horizon | Explicit 10 s, matching G1's standardized motion duration; motion-end termination is active |
 
-The fixed-reference terrain curriculum uses the episode horizon when no motion library is active; otherwise its move-down criterion would see a zero-duration clip. G1 motion-enabled behavior is preserved.
+All X2 presets load the packaged X2 ACCAD library and retain the corresponding G1 reference sampling, freeze/reset behavior and motion-scale curricula. Flat torso and base-height command ranges also follow G1. The shared loader is unchanged: duration normalization changes pose playback timing but does not rescale stored velocities. This preserves G1 behavior, including its playback/reset-velocity mismatch. The fixed-reference terrain-curriculum fallback remains available when motions are explicitly disabled.
 
 X2 foothold samples use the left/right `sole_z` coordinates from the packaged
 derived geometry (`-0.073 m` in each ankle-roll frame), configured through

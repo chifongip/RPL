@@ -74,13 +74,13 @@ These inherited settings and preparation choices define the nominal simulation b
 | Joint soft-limit fraction | 0.95 | G1 configuration; symmetric generated waist-yaw stops yield soft limits +/-2.09741 rad |
 | Simulation waist-yaw hard stops | +/-2.2078 rad | Applied to generated URDF, MuJoCo and runtime config; original vendor files retain [-3.43,2.2078] |
 | PPO symmetry | Actor coefficient 1, critic coefficient 0 | Unmodified G1 trainer and transforms; no X2 loss override |
-| Nominal base height / height-scan offset | 0.68 m / 0.68 m | HOME pelvis height; height-scan offset is a normalization choice |
+| Nominal base height / height-scan offset | 0.64 m / 0.68 m | Command reference; height-scan offset remains a separate normalization choice |
 | Foot-edge samples | front `(0.11,0,0)`, rear `(-0.065,0,0)`, sides `(0.0225,±0.06,0)` m | Approximation from lowest support-sphere centers; existing reward uses base orientation |
 | Knee minimum penalty threshold | 0.2 rad | G1 task preference; hard knee minimum remains 0 |
 | Low-height termination / gravity XY threshold | 0.3 m / 0.8 | Existing RPL termination baseline |
-| Initial arms / hand forces | HOME references / disabled | No motion library needed for the baseline |
+| Training arms / hand forces | X2 ACCAD references / enabled for experts and student | G1 10-second normalization; flat baseline has no hand forces |
 | Torso pitch / yaw / roll range | `[-0.5,1.57]` / `[-1,1]` / `[0,0]` rad | RPL stance-gated command curriculum; torso pitch is not a waist-joint target |
-| Base-height command delta | `[-0.3,0]` m | RPL stance-gated curriculum, relative to 0.68 m |
+| Base-height command delta | `[-0.3,0]` m | RPL stance-gated curriculum, relative to 0.64 m |
 
 Per-joint raw-action intervals that keep targets within hard limits are included in the JSON. For example, waist pitch permits about ±1.256 raw action units around HOME at the 0.25 scale. G1's ±100 global clip is only an outlier guard; it must not be described as joint-limit protection.
 

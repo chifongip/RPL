@@ -27,8 +27,10 @@ quaternions in wxyz order. The full-body trajectory supplies kinematic context;
 the upper-body training command consumes the 14 arm channels.
 
 Ten-second duration normalization is an optional motion-loader setting used by
-G1 training. It does not belong in dataset export. X2 presets still use
-`motion=None`; generating this library does not enable motion references.
+G1 training. It does not belong in dataset export. X2 training presets use this library with G1's ten-second duration normalization.
+Only the 14 arm channels supply training references; root and leg trajectories
+are not replayed. The optional flat stage has no hand forces; experts and the
+depth student enable them.
 
 ## Generate and validate
 
@@ -106,9 +108,10 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python \
 ```
 
 The loader check uses `standardize_motion_length=False` to retain the native
-timing that the saved velocities describe. Optional training-time normalization
-to a different duration changes playback speed; it is outside this data-only
-verification. Existing training presets remain unchanged.
+timing that the saved velocities describe. Training-time normalization
+to ten seconds changes playback speed and is outside this native-timing data
+verification. The shared G1 loader does not rescale stored velocities during
+normalization; X2 retains that behavior for training parity.
 
 ## Optional visual review
 

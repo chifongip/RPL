@@ -150,7 +150,7 @@ def test_x2_runtime_constants_cover_all_joints():
     assert robot.dof_names == DOF_NAMES
     assert list(robot.init_state.default_joint_angles.values()) == HOME
     assert set(robot.control.stiffness) == set(DOF_NAMES)
-    assert robot.motion is None
+    assert Path(robot.motion.motion_file).is_dir()
     assert len(robot.body_names) == robot.num_bodies == 30
     assert robot.asset.robot_type == "x2_29dof"
     assert robot.asset.replace_cylinder_with_capsule is False

@@ -4,6 +4,32 @@ Validated on 2026-11-06 on the current computer's NVIDIA GeForce RTX 4090 Laptop
 
 These checks establish runtime/model consistency and finite short-run optimization/inference. Three-iteration smoke checkpoints are not usable walking policies. Full training has not been launched.
 
+## Motion and hand-force integration (2026-11-09)
+
+The complete bounded suite passed again under
+`logs/x2-runtime-smoke/20261109_065947/` with X2 ACCAD references enabled in
+all training stages, hand forces enabled for experts/student, G1 flat command
+ranges restored, and nominal commanded height set to 0.64 m. The height-scan
+offset and geometric initialization remain 0.68 m. Motion playback uses G1's
+10-second normalization and unchanged stored-velocity behavior.
+
+- Training regression suite: 120 passed, 2 skipped; simulator/model/derivation
+  suite: 26 passed; policy suite: 28 passed.
+- Real-clip command checks cover arm ordering, normalized playback, frozen
+  references, upper-body resets and motion-end termination. A deterministic
+  nonzero-scale force check covers wrist bodies, arm budgets, application
+  positions and observation buffers independently of initial curriculum gating.
+- Flat PPO, terrain-expert PPO and depth DAgger each completed three iterations
+  with 32 environments. New smoke expert weights supplied all four student
+  teacher routes. Maximum PyTorch/ONNX errors were 3.35e-8, 2.61e-8 and 5.22e-8,
+  respectively.
+- Both flat and dual-depth simulator/policy runs passed 50 policy ticks over
+  DDS, including init/start/stop; the depth run consumed both camera streams.
+  Inference still supplies HOME arm references with interactive IK disabled.
+
+The earlier results below record the original fixed-reference integration.
+These new smoke results establish integration, not tracking quality or balance.
+
 ## Learning algorithm boundary
 
 X2 uses the corresponding G1 PPO trainer, symmetry utility, action term and environment classes directly. There is no X2 PPO implementation, custom sample mask, loss normalization or distributed-loss validity guard. The Holosoma submodule has no working-tree changes. X2's DAgger adapter only selects and validates teacher checkpoints; it does not change the distillation update.

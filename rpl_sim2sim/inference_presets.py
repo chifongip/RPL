@@ -182,7 +182,7 @@ x2_29dof_rpl_depth = replace(
     g1_29dof_rpl_depth,
     robot=x2_29dof_rpl,
     camera=x2_dual_depth,
-    task=replace(rpl_depth_task, model_path="", desired_base_height=0.68),
+    task=replace(rpl_depth_task, model_path="", desired_base_height=0.64),
 )
 x2_flat_observation = replace(
     rpl_depth_observation,

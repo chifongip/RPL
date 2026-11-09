@@ -49,7 +49,10 @@ x2_29dof = replace(
     feet_left_offset_in_body=BASELINE["four_point_foot_edge_offsets_m"]["left"],
     feet_right_offset_in_body=BASELINE["four_point_foot_edge_offsets_m"]["right"],
     lidar_height_offset=0.68,
-    motion=None,
+    motion=replace(
+        g1.g1_29dof_falcon_hm.robot.motion,
+        motion_file=str(DATA_DIR / "motions/x2/falcon_accad_all"),
+    ),
 )
 
 _camera_term = warp_dual_depth_cameras_falcon.terms["warp_depth"]
@@ -73,22 +76,17 @@ x2_dual_depth = replace(
 
 def _x2(base, name, *, flat=False, distill=False):
     command = deepcopy(base.command)
-    command.setup_terms["locomotion_command"].params["default_base_height"] = 0.68
-    # Fixed HOME arms require no G1 motion clips. Keep the force manager's
-    # buffers/reward interfaces, but defer forces until an X2 hand task is added.
+    command.setup_terms["locomotion_command"].params["default_base_height"] = 0.64
+    # Retain G1's stage-specific force task at X2's final wrist origins.
     command.params["ee_force_config"] = {
         **command.params.get("ee_force_config", {}),
-        "enabled": False,
+        "enabled": not flat,
         "left_hand_link": "left_wrist_roll_link",
         "right_hand_link": "right_wrist_roll_link",
         "left_extend_parent_link": "left_wrist_roll_link",
         "right_extend_parent_link": "right_wrist_roll_link",
         "extend_offset": (0.0, 0.0, 0.0),
     }
-    if flat:
-        ranges = command.setup_terms["locomotion_command"].params["command_ranges"]
-        for key in ("waist_yaw", "waist_roll", "waist_pitch", "base_height"):
-            ranges[key] = [0.0, 0.0]
     sim = replace(
         base.simulator,
         config=replace(base.simulator.config, sim=replace(base.simulator.config.sim, max_episode_length_s=10.0)),
@@ -125,7 +123,10 @@ def _x2(base, name, *, flat=False, distill=False):
     )
     return replace(
         base,
-        robot=x2_29dof,
+        robot=replace(
+            x2_29dof,
+            motion=replace(base.robot.motion, motion_file=x2_29dof.motion.motion_file),
+        ),
         reward=reward,
         command=command,
         simulator=sim,
